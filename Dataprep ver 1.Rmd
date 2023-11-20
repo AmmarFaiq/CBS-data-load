@@ -1,0 +1,2088 @@
+---
+title: "Data_Loading"
+output: html_notebook
+---
+
+Load R packages into the workspace
+```{r setup}
+library(haven)
+library(data.table)
+library(memisc)
+library(plyr)
+library(dplyr)
+library(tidyr)
+library(zoo)
+library(lubridate)
+library(labelled)
+library(tableone)
+library(table1)
+library(arsenal)
+library(ggplot2)
+library(XLConnect)
+
+
+
+memory.limit(100000)
+memory.size(max=TRUE)
+```
+
+# Preparation 
+```{r}
+start_time = Sys.time()
+
+VSLGWBTAB_folder = "G:\\BouwenWonen\\VSLGWBTAB\\"
+VSLGWBTAB_file = "VSLGWB2022TAB03V2.sav"
+
+GBAADRESOBJECTBUS_folder = "G:\\Bevolking\\GBAADRESOBJECTBUS\\"
+GBAADRESOBJECTBUS_file = "GBAADRESOBJECT2022BUSV1.sav"
+
+
+GBAPERSOONTAB_folder = "G:\\Bevolking\\GBAPERSOONTAB\\2022\\"
+GBAPERSOONTAB_file = "GBAPERSOON2022TABV1.sav"
+
+GBAOVERLIJDENTAB_folder = "G:\\Bevolking\\GBAOVERLIJDENTAB\\2022\\"
+GBAOVERLIJDENTAB_file = "GBAOVERLIJDEN2022TABV1.sav"
+
+DO_common_path = "G:\\GezondheidWelzijn\\DO\\"
+DO_primary_dirs = list.files(DO_common_path)[11:18] #2007 - 2012
+
+DOORZTAB_common_path = "G:\\GezondheidWelzijn\\DOODOORZTAB\\"
+DOORZTAB_primary_dirs = list.files(DOORZTAB_common_path)[1:10] #2013 - 2022
+
+INPATAB_common_path = "G:\\InkomenBestedingen\\INPATAB\\"
+INPATAB_primary_dirs = list.files(INPATAB_common_path)[2:12] # 2011 -2021
+
+INPATAB_select = c("RINPERSOON", "RINPERSOONHKW", "INPBELI", "INPPERSINK", "INPSECJ","INPT3170RBW","INPT3180RST", "INPT3190RBS")
+
+
+# VEHTAB_common_path = "G:\\InkomenBestedingen\\VEHTAB\\"
+# VEHTAB_primary_dirs = list.files(VEHTAB_common_path)
+# 
+# VEHTAB_primary_dirs = VEHTAB_primary_dirs[grep("^VEH+", VEHTAB_primary_dirs) ]
+# VEHTAB_primary_dirs = VEHTAB_primary_dirs[grep("+.sav", VEHTAB_primary_dirs)]
+# 
+# VEHTAB_primary_dirs= VEHTAB_primary_dirs[6:15]
+
+INHATAB_common_path = "G:\\InkomenBestedingen\\INHATAB\\"
+INHATAB_primary_dirs = list.files(INHATAB_common_path)[2:12] # 2011 -2021
+
+INHATAB_select = c("RINPERSOONHKW", "INHAHL", "INHGESTINKH", "INHPOPIIV", "INHSAMAOW", "INHSAMHH", "INHUAFTYP", "INHARMLAG")
+
+
+ZVWZORGKOSTENTAB_path = "G:\\GezondheidWelzijn\\ZVWZORGKOSTENTAB\\"
+ZVWZORGKOSTENTAB_folder_list = list.files(ZVWZORGKOSTENTAB_path)[1:12]
+ZVWZORGKOSTENTAB_select = c("RINPERSOON", "ZVWKHUISARTS", "ZVWKFARMACIE", "ZVWKMONDZORG", "ZVWKZIEKENHUIS", "ZVWKPARAMEDISCH", "ZVWKHULPMIDDEL", "ZVWKZIEKENVERVOER", "ZVWKGEBOORTEZORG", "ZVWKBUITENLAND", "ZVWKOVERIG", "ZVWKEERSTELIJNSPSYCHO", "ZVWKGGZ", "ZVWKGENBASGGZ", "ZVWKSPECGGZ", "ZVWKGERIATRISCH", "ZVWKWYKVERPLEGING", "NOPZVWKHUISARTSINSCHRIJF", "NOPZVWKHUISARTSCONSULT", "NOPZVWKHUISARTSOVERIG")
+
+GBAHUISHOUDENS_path = "G:\\Bevolking\\GBAHUISHOUDENSBUS\\"
+GBAHUISHOUDENS_filename = "GBAHUISHOUDENS2022BUSV1.sav"
+GBAHUISHOUDENS_select = c("RINPERSOON","DATUMAANVANGHH","DATUMEINDEHH","TYPHH", "AANTALPERSHH")
+
+DBC_common_path = "G:\\GezondheidWelzijn\\MSZSUBTRAJECTENTAB\\"
+DBC_primary_dirs = list.files(DBC_common_path)[2:9]
+
+DBC_prestatie_path = "G:\\GezondheidWelzijn\\MSZPRESTATIESVEKTTAB\\"
+DBC_prestatie_folder_list = list.files(DBC_prestatie_path)[3:4]
+
+med_common_path = "G:\\GezondheidWelzijn\\MEDICIJNTAB\\"
+med_primary_dirs = list.files(med_common_path)[2:16]
+
+
+WANBZVWTAB_path = "G:\\GezondheidWelzijn\\WANBZVWTAB\\"
+WANBZVWTAB_folder_list = list.files(WANBZVWTAB_path)[1:11] #until 2020, 2021 cannot get access
+
+WMO_common_path = "G:\\GezondheidWelzijn\\WMOBUS\\"
+WMO_primary_dirs = list.files(WMO_common_path)[2:9]
+
+Wlz_common_path = "G:\\GezondheidWelzijn\\GEBWLZTAB\\"
+Wlz_primary_dirs = list.files(Wlz_common_path)[1:9]
+
+gemcode = c("0518","0603", "0629", "1916")
+
+Diagnosis_name = c("COPD","Hypertensie","Diabetes_I","Diabetes_II","Chronic_Hartfalen","OMA","Prostaatcarcinoom","Morbus_Parkinson","Heupfractuur", "BMI>45")
+Specialisme_code = c("0322","0320","0313","0313","0320","0302","0306","0330","8418","0303")
+Diagnose_code = c("1241","902","221","222","302","13","040","0501","303","342")
+
+WSNPPERSBUS_path = "G:\\VeiligheidRecht\\WSNPPERSBUS\\"
+WSNPPERSBUS_filename = "WSNPPERSBUS2022V1.sav"
+WSNPPERSBUS_select = c("RINPERSOON","Wsnpdatumtoelaat","Wsnpdatumbeein")
+
+# 's-Gravenhage	0518
+# Rijswijk	0603
+# Wassenaar	0629
+# Leidschendam-Voorburg	1916
+
+# Delft	0503
+# Zoetermeer	0637
+# Westland	1783
+# Midden-Delfland	1842
+
+# Pijnacker-Nootdorp	1926
+# rm(ADD_DATA)
+
+gc()
+
+MIN_YEAR = 2008
+MAX_YEAR = 2022
+
+end_time = Sys.time()
+
+end_time - start_time
+
+```
+
+
+
+#2. Add information from GBAADRESOBJECTBUS (this couples individuals to the verblijfobjects and start and end of adresses for these ind) and select only gem codes we need, 2= rinpersoon, 3= GBADATUMAANVANGADRESHOUDING, 4= GBADATUMEINDEADRESHOUDING, 6= rinobjectnr, gemcode contains gemeentecodes from Haaglanden area
+
+
+```{r}
+start_time = Sys.time()
+
+GWBTAB = as.data.table(read_spss(paste(VSLGWBTAB_folder,VSLGWBTAB_file,sep=""),col_select = c(2,27:74))) #2007 - 2022
+
+## convert wide format to long format of the data, with column name pattern that contains wc, bc, and gem
+GWBTAB = melt(GWBTAB, measure = patterns("wc","bc","gem"), variable.name = "YEAR", value.name = c("wc","bc","gem"))
+
+## year is just a dummy column name that used to the melt function.
+GWBTAB[,YEAR:=NULL]
+
+#GWBTAB = GWBTAB[!duplicated(GWBTAB,by=colnames(GWBTAB),fromLast = T)]
+ADDDATUM= as.data.table(read_spss(paste(GBAADRESOBJECTBUS_folder,GBAADRESOBJECTBUS_file,sep=""),col_select = c(2,3,4,6)))
+
+# Get list of unique rinobjectnumber based on selected gementee code
+A = unique(GWBTAB[gemcode, on=c("gem"), nomatch =NULL]$RINOBJECTNUMMER)
+# Get list of unique Rinpersoon based on selected rinobjectnummer
+B = unique(ADDDATUM[A, on=c("RINOBJECTNUMMER"), nomatch =NULL]$RINPERSOON)
+
+ADDDATUM = ADDDATUM[B, on=c("RINPERSOON"), nomatch =NULL]
+
+C = unique(ADDDATUM$RINOBJECTNUMMER)
+
+GWBTAB = GWBTAB[C, on=c("RINOBJECTNUMMER"), nomatch =NULL]
+gc()
+
+#merge 
+
+ADD_DATA = merge(GWBTAB,ADDDATUM,by = "RINOBJECTNUMMER", allow.cartesian = T)
+# length(unique(ADD_DATA[gem == "0518"][YEAR=="2011"]$RINPERSOON))
+
+#remove duplicates
+ADD_DATA = ADD_DATA[!duplicated(ADD_DATA,by=c("RINPERSOON","RINOBJECTNUMMER","wc", "bc", "gem", "GBADATUMAANVANGADRESHOUDING", "GBADATUMEINDEADRESHOUDING"),fromLast = F)]
+
+
+A = unique(ADD_DATA$RINPERSOON)
+
+rm(ADDDATUM)
+rm(GWBTAB)
+gc()
+
+ADD_DATA = ADD_DATA[gemcode, on=c("gem"), nomatch =NULL]
+
+A = unique(ADD_DATA$RINPERSOON)
+
+gc()
+```
+
+
+
+
+```{r}
+# change the moving end date not later than minimum year
+ADD_DATA = ADD_DATA[as.numeric(substr(GBADATUMEINDEADRESHOUDING,1,4)) >= MIN_YEAR ]
+
+# change the typo/ date that is higher than allowed maximum year
+ADD_DATA[as.numeric(substr(ADD_DATA$GBADATUMEINDEADRESHOUDING,1,4)) > MAX_YEAR , GBADATUMEINDEADRESHOUDING := paste0(MAX_YEAR,"1231")]
+
+# change the moving in date 
+ADD_DATA[as.numeric(substr(ADD_DATA$GBADATUMAANVANGADRESHOUDING,1,4)) <= MIN_YEAR , GBADATUMAANVANGADRESHOUDING := paste0(MIN_YEAR,"0101")]
+
+# we found out that there are some people who are registered into two address in the same period of time. We will choose only one of them
+ADD_DATA = ADD_DATA[!duplicated(ADD_DATA,by=c("RINPERSOON", "GBADATUMAANVANGADRESHOUDING", "GBADATUMEINDEADRESHOUDING"),fromLast = F)]
+
+ADD_DATA[, DIFF := as.Date(GBADATUMEINDEADRESHOUDING, format= "%Y%m%d") - as.Date(GBADATUMAANVANGADRESHOUDING, format= "%Y%m%d")]
+
+
+ADD_DATA= ADD_DATA[order(RINPERSOON,GBADATUMAANVANGADRESHOUDING, DIFF)]
+
+ADD_DATA = ADD_DATA[!duplicated(ADD_DATA,by=c("RINPERSOON", "GBADATUMAANVANGADRESHOUDING"),fromLast = T)]
+
+ADD_DATA[, YEAR := as.numeric(substr(GBADATUMEINDEADRESHOUDING,1,4))]
+
+ADD_DATA[, LIFEEVENTS_MOVING := ifelse(((paste0(GBADATUMAANVANGADRESHOUDING) == paste0(MIN_YEAR,12,31)) & (paste0(GBADATUMEINDEADRESHOUDING) == paste0(MAX_YEAR,12,31))),0,.N ), by = .(RINPERSOON,YEAR)]
+
+ADD_DATA= ADD_DATA[order(RINPERSOON,YEAR, DIFF)]
+
+ADD_DATA = ADD_DATA[!duplicated(ADD_DATA,by=c("RINPERSOON", "YEAR"),fromLast = T)]
+
+# We also found that there are some people that registered into two address without the same end date. so we choose the longest stay
+ADD_DATA$GBADATUMAANVANGADRESHOUDING = as.Date(ADD_DATA$GBADATUMAANVANGADRESHOUDING, format= "%Y%m%d")
+ADD_DATA$GBADATUMEINDEADRESHOUDING = as.Date(ADD_DATA$GBADATUMEINDEADRESHOUDING, format= "%Y%m%d")
+
+ADD_DATA = ADD_DATA[, .(YEAR = seq.Date(GBADATUMAANVANGADRESHOUDING,GBADATUMEINDEADRESHOUDING,'year')), by = c("RINOBJECTNUMMER","wc", "bc", "gem", "RINPERSOON", "GBADATUMAANVANGADRESHOUDING", "GBADATUMEINDEADRESHOUDING", "LIFEEVENTS_MOVING") ]
+
+ADD_DATA[,YEAR := as.character(year(YEAR))]
+
+
+GBAPERSOON = as.data.table(read_spss(paste(GBAPERSOONTAB_folder,GBAPERSOONTAB_file,sep=""),col_select = c(2,4,8,9,10:12)))
+GBAPERSOON = unite(GBAPERSOON, "GBAGEBOORTEDATUM", c("GBAGEBOORTEJAAR","GBAGEBOORTEMAAND","GBAGEBOORTEDAG"),sep = "")
+
+GBAPERSOON = as.data.table(GBAPERSOON)
+GBAPERSOON = GBAPERSOON[A, on=("RINPERSOON"), nomatch =NULL]
+
+
+ADD_DATA = merge(ADD_DATA,GBAPERSOON,by = "RINPERSOON")
+rm(GBAPERSOON)
+gc()
+
+end_time = Sys.time()
+
+end_time - start_time
+```
+
+
+
+
+```{r}
+
+
+# 
+# ADD_DATA = ADD_DATA[!duplicated(ADD_DATA,by=c("RINPERSOON","YEAR"),fromLast = T)]
+# 
+# ADD_DATA_2 = ADD_DATA[,.(RINPERSOON, GBADATUMAANVANGADRESHOUDINGin, GBADATUMEINDEADRESHOUDINGin, YEAR = seq(floor(GBADATUMAANVANGADRESHOUDINGin),  ceiling(GBADATUMEINDEADRESHOUDINGin), by =1)), by = 1:nrow(ADD_DATA)][,nrow:=NULL][]
+# 
+# ADD_DATA_2[,YEAR:= as.character(YEAR)]
+# ADD_DATA_2 = ADD_DATA_2[!duplicated(ADD_DATA_2,by=c("RINPERSOON","YEAR"),fromLast = F)]
+# ADD_DATA_2 = ADD_DATA_2[ as.numeric(YEAR) >= MIN_YEAR]
+# 
+# ADD_DATA = merge(ADD_DATA, ADD_DATA_2, by=colnames(ADD_DATA_2),all=T)
+# 
+# rm(ADD_DATA_2)
+# 
+# ADD_DATA[,GBADATUMAANVANGADRESHOUDING2 := ifelse((floor(GBADATUMAANVANGADRESHOUDINGin) < as.double(YEAR) & (GBADATUMAANVANGADRESHOUDINGin < GBADATUMEINDEADRESHOUDINGin)), paste0(YEAR,"01","01"), GBADATUMAANVANGADRESHOUDING)]
+# ADD_DATA[,GBADATUMAANVANGADRESHOUDING2 := ifelse((as.numeric(YEAR) > floor(GBADATUMEINDEADRESHOUDINGin)), NA, GBADATUMAANVANGADRESHOUDING2)]
+# ADD_DATA[,GBADATUMAANVANGADRESHOUDING2 := ifelse((as.numeric(YEAR) < floor(GBADATUMAANVANGADRESHOUDINGin)), NA, GBADATUMAANVANGADRESHOUDING2)]
+# 
+# ADD_DATA[,GBADATUMAANVANGADRESHOUDING2 := ifelse((as.numeric(YEAR) <= (GBADATUMAANVANGADRESHOUDINGin)), as.character(format(date_decimal(as.numeric(GBADATUMAANVANGADRESHOUDINGin)),"%Y%m%d")), GBADATUMAANVANGADRESHOUDING2)]
+# 
+# ADD_DATA[,GBADATUMEINDEADRESHOUDING2 := ifelse((floor(GBADATUMEINDEADRESHOUDINGin) > as.double(YEAR) & (GBADATUMAANVANGADRESHOUDINGin < GBADATUMEINDEADRESHOUDINGin)), paste0(YEAR,"12","31"), GBADATUMEINDEADRESHOUDING)]
+# ADD_DATA[,GBADATUMEINDEADRESHOUDING2 := ifelse(GBADATUMEINDEADRESHOUDINGin < as.double(YEAR), NA, GBADATUMEINDEADRESHOUDING2)]
+# ADD_DATA[,GBADATUMEINDEADRESHOUDING2 := ifelse((as.numeric(YEAR) < floor(GBADATUMAANVANGADRESHOUDINGin)), NA, GBADATUMEINDEADRESHOUDING2)]
+# 
+# ADD_DATA = ADD_DATA[ order(RINPERSOON, as.numeric(YEAR), GBADATUMAANVANGADRESHOUDINGin)]
+# 
+# gc()
+# 
+# colcovariate = names(ADD_DATA)[c(5:13)]
+# 
+# ADD_DATA[,(colcovariate) := lapply(.SD, function(x) na.locf(x, fromLast = T, na.rm = F)), by = c("RINPERSOON"), .SDcols = colcovariate]
+# ADD_DATA[,(colcovariate) := lapply(.SD, function(x) na.locf(x, na.rm = F)), by = c("RINPERSOON"), .SDcols = colcovariate]
+# 
+# 
+# ADD_DATA = ADD_DATA[ !duplicated(ADD_DATA, by = c("RINPERSOON", "YEAR"), fromLast = T)]
+
+```
+
+
+
+
+
+#6 Define the path of DEATH that is going to be combined
+
+```{r}
+start_time = Sys.time()
+
+# 6. add information about deceased individuals from GBAOVERLIJDENTAB (from 1995 onward, contains date of death) for causes of death (ICD10 codes) Do (1995- 2012) and Doodoorztab (2012 and onward)
+DODATUM = as.data.table(read_spss(paste(GBAOVERLIJDENTAB_folder,GBAOVERLIJDENTAB_file,sep=""),col_select = c(2,3)))
+
+# create an empty dataframe
+DO_data = data.table()
+
+# loop for each year
+for(dir in DO_primary_dirs){
+    
+  # define root folder with year included
+    sub_folder = list.files(paste(DO_common_path,dir,sep=""))
+    
+    
+    # do load the data if there is a file inside the folder
+    if (any(grepl("+.sav", sub_folder))) {
+      
+      # get the filename inside the folder
+      filename = sub_folder[grep("+.sav", sub_folder)][length(grep("+.sav", sub_folder))]
+      
+      # read the datafile
+      if( dir == "2012"){
+         temp_data = as.data.table(read_spss(file = paste(DO_common_path,dir,"\\",filename,sep=""), col_select = c(2,9,14) ))
+         setnames(temp_data, colnames(temp_data), c("RINPERSOON","ICDCODE","YEAR"))
+         temp_data$RINPERSOON = as.character(temp_data$RINPERSOON)
+         temp_data$ICDCODE = as.character(temp_data$ICDCODE)
+      }
+      else{
+        temp_data = as.data.table(read_spss(file = paste(DO_common_path,dir,"\\",filename,sep=""), col_select = c(2,7,12)))
+        setnames(temp_data, colnames(temp_data), c("RINPERSOON","ICDCODE","YEAR"))
+        temp_data$RINPERSOON = as.character(temp_data$RINPERSOON)
+        temp_data$ICDCODE = as.character(temp_data$ICDCODE)
+      }
+     
+      DO_data = rbindlist(list(DO_data,temp_data))
+      rm(temp_data)
+      }
+}
+
+
+
+# create an empty dataframe
+DOORZTAB_data = data.table()
+
+# loop for each year datafile
+for(dir in DOORZTAB_primary_dirs){
+    
+  # define root folder with year included
+    sub_folder = list.files(paste(DOORZTAB_common_path,dir,sep=""))
+    
+    
+    # do load the data if there is a file inside the folder
+    if (any(grepl("+.sav", sub_folder))) {
+      
+      # get the filename inside the folder
+      filename = sub_folder[grep("+.sav", sub_folder)][length(grep("+.sav", sub_folder))]
+      
+      # read the datafile
+      temp_data = as.data.table(read_spss(file = paste(DOORZTAB_common_path,dir,"\\",filename,sep=""), col_select =  c(2,3,7)))
+      setnames(temp_data, colnames(temp_data), c("RINPERSOON","ICDCODE","YEAR"))
+      temp_data$RINPERSOON = as.character(temp_data$RINPERSOON)
+      temp_data$ICDCODE = as.character(temp_data$ICDCODE)
+     
+      DOORZTAB_data = rbindlist(list(DOORZTAB_data,temp_data))
+      rm(temp_data)
+      }
+}
+
+
+DOODOORZTAB = rbindlist(list(DO_data,DOORZTAB_data))
+DOODOORZTAB = DOODOORZTAB[!is.na(RINPERSOON)]
+DOODOORZTAB[, RINPERSOON := ifelse(nchar(RINPERSOON) < 9, paste0(strrep("0",times= 9 - nchar(RINPERSOON)),RINPERSOON),RINPERSOON)]
+
+
+DOODOORZDATUM = merge(DOODOORZTAB, DODATUM, by = "RINPERSOON", all =T)
+
+DOODOORZDATUM = DOODOORZDATUM[A, on=c("RINPERSOON"), nomatch =NULL]
+
+
+ADD_DATA = merge(ADD_DATA,DOODOORZDATUM,by = c("RINPERSOON","YEAR"), all.x= T)
+
+ADD_DATA = ADD_DATA[!duplicated(ADD_DATA,by=colnames(ADD_DATA),fromLast = T)]
+
+ADD_DATA = ADD_DATA[!is.na(YEAR)]
+
+
+rm(DO_data)
+rm(DOORZTAB_data)
+rm(DODATUM)
+rm(DOODOORZTAB)
+rm(DOODOORZDATUM)
+
+
+ADD_DATA = ADD_DATA[ YEAR >= MIN_YEAR]
+
+ADD_DATA[,c("ICDCODE","GBADatumOverlijden") := lapply(.SD, function(x) na.locf(x, na.rm = F)), by = c("RINPERSOON"), .SDcols = c("ICDCODE","GBADatumOverlijden") ]
+
+# ADD_DATA = ADD_DATA[ as.numeric(YEAR) <= GBADATUMEINDEADRESHOUDINGin]
+
+end_time = Sys.time()
+
+end_time - start_time
+```
+
+
+
+
+
+## 8 Add personalized income information 
+```{r}
+start_time = Sys.time()
+
+A = unique(ADD_DATA$RINPERSOON)
+
+## create an empty dataframe
+INPATAB_data = data.table()
+
+for(dir in INPATAB_primary_dirs){
+
+  # define root folder with year included
+    sub_folder = (paste(INPATAB_common_path,dir,sep=""))
+
+
+    # do load the data if there is a file inside the folder
+    if (any(grepl("+.sav", sub_folder))) {
+
+      # get the filename inside the folder
+      filename = sub_folder[grep("+.sav", sub_folder)][length(grep("+.sav", sub_folder))]
+
+      temp_data = as.data.table(read_sav(file = filename, col_select = INPATAB_select))
+
+      temp_data = temp_data[A, on=c("RINPERSOON"), nomatch =NULL]
+      temp_data$YEAR = substr(dir,5,8)
+
+      INPATAB_data = rbindlist(list(INPATAB_data,temp_data))
+      rm(temp_data)
+    }
+}
+
+# create an empty dataframe
+INHATAB_data = data.table()
+
+for(dir in INHATAB_primary_dirs){
+    
+  # define root folder with year included
+    sub_folder = (paste(INHATAB_common_path,dir,sep=""))
+    
+    
+    # do load the data if there is a file inside the folder
+    if (any(grepl("+.sav", sub_folder))) {
+      
+      # get the filename inside the folder
+      filename = sub_folder[grep("+.sav", sub_folder)][length(grep("+.sav", sub_folder))]
+
+      temp_data = as.data.table(read_sav(file = filename, col_select = INHATAB_select))
+
+      temp_data = temp_data[A, on=c("RINPERSOONHKW"), nomatch =NULL]
+      
+      temp_data$YEAR = substr(dir,5,8)
+
+      INHATAB_data = rbindlist(list(INHATAB_data,temp_data))
+      rm(temp_data)
+    }
+}
+
+# # create an empty dataframe
+# VEHTAB_data = data.table()
+# 
+# for(dir in VEHTAB_primary_dirs){
+# 
+#   # define root folder with year included
+#     sub_folder = (paste(VEHTAB_common_path,dir,sep=""))
+# 
+#       # get the filename inside the folder
+#     filename = sub_folder[grep("+.sav", sub_folder)][length(grep("+.sav", sub_folder))]
+#     temp_data = as.data.table(read_spss(file = filename, col_select =c(2,3,4)))
+# 
+#     temp_data = temp_data[A, on=c("RINPERSOONHKW"), nomatch =NULL]
+# 
+#     temp_data$YEAR = substr(dir,4,7)
+# 
+#     VEHTAB_data = rbindlist(list(VEHTAB_data,temp_data))
+#     rm(temp_data)
+# 
+# }
+
+end_time = Sys.time()
+
+end_time - start_time
+
+
+```
+
+
+```{r}
+start_time = Sys.time()
+
+ZVWZORGKOSTENTAB_data = data.table()
+
+for (dir in ZVWZORGKOSTENTAB_folder_list) {
+  
+  sub_folder_file = list.files(paste(ZVWZORGKOSTENTAB_path,dir,sep=""))
+  
+  if(any(grepl("+.sav", sub_folder_file))){
+    filename = sub_folder_file[grepl("+.sav", sub_folder_file)][length(sub_folder_file[grepl("+.sav", sub_folder_file)])]
+    filename = paste(ZVWZORGKOSTENTAB_path, dir, "\\", filename, sep="")
+    temp_data = as.data.table(read_spss(file=paste(filename,sep=""), col_select = ZVWZORGKOSTENTAB_select))
+    
+    temp_data[, ZVWKOSTENTOTAAL := rowSums(.SD, na.rm = T), .SDcols = c("ZVWKHUISARTS", "ZVWKFARMACIE", "ZVWKMONDZORG", "ZVWKZIEKENHUIS", "ZVWKPARAMEDISCH", "ZVWKHULPMIDDEL", "ZVWKZIEKENVERVOER", "ZVWKGEBOORTEZORG", "ZVWKBUITENLAND", "ZVWKOVERIG", "ZVWKEERSTELIJNSPSYCHO", "ZVWKGGZ", "ZVWKGENBASGGZ", "ZVWKSPECGGZ", "ZVWKGERIATRISCH", "ZVWKWYKVERPLEGING")]
+    
+    temp_data[, ZVWKOSTENPSYCHO := rowSums(.SD, na.rm = T), .SDcols = c( "ZVWKGGZ", "ZVWKGENBASGGZ", "ZVWKSPECGGZ")]
+  
+    temp_data$YEAR = dir
+     
+    temp_data = temp_data[A, on=c("RINPERSOON"), nomatch =NULL]
+    
+    ZVWZORGKOSTENTAB_data = rbindlist(list(ZVWZORGKOSTENTAB_data, temp_data))
+    rm(temp_data)
+    gc()
+  }
+}
+
+end_time = Sys.time()
+
+end_time - start_time
+
+```
+
+
+
+```{r}
+start_time = Sys.time()
+
+
+# create an empty dataframe
+DBC_data = data.table()
+
+A = unique(ADD_DATA$RINPERSOON)
+
+for(dir in DBC_primary_dirs){
+
+  # define root folder with year included
+    sub_folder = (paste(DBC_common_path,dir,sep=""))
+
+
+    # do load the data if there is a file inside the folder
+    if (any(grepl("+.sav", sub_folder))) {
+
+      # get the filename inside the folder
+      filename = sub_folder[grep("+.sav", sub_folder)][length(grep("+.sav", sub_folder))]
+
+      temp_data = as.data.table(read_spss(file = filename, col_select = c(2,7,8,12)))
+
+      temp_data = temp_data[A, on=c("RINPERSOON"), nomatch =NULL]
+
+      temp_data$YEAR = substr(dir,16,19)
+
+      DBC_data = rbindlist(list(DBC_data,temp_data))
+      rm(temp_data)
+    }
+}
+
+
+DBC_prestatie_data = data.table()
+
+for (dir in DBC_prestatie_folder_list) {
+
+  sub_folder_file = list.files(paste(DBC_prestatie_path,dir,sep=""))
+
+  if(any(grepl("+.sav", sub_folder_file))){
+    filename = sub_folder_file[grepl("+.sav", sub_folder_file)][length(sub_folder_file[grepl("+.sav", sub_folder_file)])]
+    filename = paste(DBC_prestatie_path, dir, "\\", filename, sep="")
+    temp_data = as.data.table(read_spss(file=paste(filename,sep=""), col_select = c(2,12,13,18)))
+
+    temp_data$YEAR = dir
+
+    temp_data = temp_data[A, on=c("RINPERSOON"), nomatch =NULL]
+
+    DBC_prestatie_data = rbindlist(list(DBC_prestatie_data, temp_data))
+    DBC_prestatie_data$VEKTMSZSpecialismeDiagnoseCombinatie = as.character(DBC_prestatie_data$VEKTMSZSpecialismeDiagnoseCombinatie)
+
+    rm(temp_data)
+    gc()
+  }
+}
+
+temp_data = as.data.table(read_spss(file=paste("G:\\GezondheidWelzijn\\MSZPRESTATIESVEKTTAB2020\\MSZPrestatiesVEKT2020TABV3.sav",sep=""), col_select = c(2,12,13,18)))
+temp_data$YEAR = "2020"
+temp_data = temp_data[A, on=c("RINPERSOON"), nomatch =NULL]
+DBC_prestatie_data = rbindlist(list(DBC_prestatie_data, temp_data))
+
+rm(temp_data)
+
+setnames(DBC_prestatie_data, c("VEKTMSZBegindatumZT","VEKTMSZEinddatumZT","VEKTMSZSpecialismeDiagnoseCombinatie"), c("MSZSTRBegindatumDBC","MSZSTREinddatumDBC", "MSZSTRSpecialismeDiagnoseCombinatie"))
+
+
+DBC_data[,MSZSTRSpecialismeDiagnoseCombinatie := as.character(MSZSTRSpecialismeDiagnoseCombinatie)]
+DBC_data = rbindlist(list(DBC_data, DBC_prestatie_data))
+
+rm(DBC_prestatie_data)
+gc()
+
+DBC_data[YEAR != substr(MSZSTRBegindatumDBC,1,4), YEAR :=  substr(MSZSTRBegindatumDBC,1,4)]
+
+
+DBC_prestatie_data = data.table()
+
+DBC_data_first = data.table(RINPERSOON= character(), YEAR = character())
+DBC_data_all = data.table(RINPERSOON= character()) 
+
+for(i in 1:length(Diagnosis_name)){
+  
+  DBC_data_filtered = DBC_data[grepl(Specialisme_code[i], MSZSTRSpecialismeDiagnoseCombinatie) & grepl(Diagnose_code[i], MSZSTRSpecialismeDiagnoseCombinatie)][ order(MSZSTRBegindatumDBC)]
+  
+  DBC_data_filtered[, (Diagnosis_name[i]) := 1]
+  DBC_data_filtered[, paste0("First",Diagnosis_name[i]) := 1]
+  
+  
+  DBC_data_filtered = DBC_data_filtered[,c(1,2,5,7,6)]
+  
+  DBC_data_filtered[, datum := decimal_date(as.Date(MSZSTRBegindatumDBC, format = '%Y%m%d'))]
+  
+  DBC_data_filtered = DBC_data_filtered[ order(RINPERSOON, -datum)]
+  
+  DBC_data_filtered = DBC_data_filtered[ !duplicated(DBC_data_filtered, by = c("RINPERSOON", "YEAR"), fromLast = T)]
+  
+  DBC_data_filtered = DBC_data_filtered[ !duplicated(DBC_data_filtered, by = c("RINPERSOON"), fromLast = T)]
+  
+  DBC_data_filtered[, datum := NULL]
+  
+  DBC_data_filtered[, MSZSTRBegindatumDBC := NULL]
+  
+  DBC_data_first = merge(DBC_data_first,DBC_data_filtered[,c(1,2,3)],by = c("RINPERSOON","YEAR"), all=T, allow.cartesian = T)
+  
+  DBC_data_all = merge(DBC_data_all,DBC_data_filtered[,c(1,4)],by = c("RINPERSOON"), all=T, allow.cartesian = T)
+  
+}
+
+rm(DBC_data)
+rm(DBC_prestatie_data)
+rm(DBC_data_filtered)
+
+DBC_data_first = DBC_data_first[as.numeric(YEAR) > MIN_YEAR]
+
+gc()
+
+DBC_data_first[as.numeric(YEAR) > MAX_YEAR, YEAR:= as.character(MAX_YEAR)]
+
+
+end_time = Sys.time()
+
+end_time - start_time
+
+```
+
+
+
+
+
+```{r}
+start_time = Sys.time()
+
+GBAHUISHOUDENS_data = as.data.table(read_spss(paste(GBAHUISHOUDENS_path, GBAHUISHOUDENS_filename,sep=""), col_select = GBAHUISHOUDENS_select))
+
+GBAHUISHOUDENS_data = GBAHUISHOUDENS_data[A, on=c("RINPERSOON"), nomatch =NULL]
+
+GBAHUISHOUDENS_data$DATE.IN = decimal_date(as.Date(GBAHUISHOUDENS_data$DATUMAANVANGHH, format= "%Y%m%d"))
+
+GBAHUISHOUDENS_data$DATE.OUT = decimal_date(as.Date(GBAHUISHOUDENS_data$DATUMEINDEHH, format= "%Y%m%d"))
+
+GBAHUISHOUDENS_data = GBAHUISHOUDENS_data[DATE.OUT >= MIN_YEAR]
+GBAHUISHOUDENS_data[DATE.IN < MIN_YEAR, DATE.IN :=MIN_YEAR]
+GBAHUISHOUDENS_data[DATE.OUT > MAX_YEAR, DATE.OUT :=MAX_YEAR]
+
+GBAHUISHOUDENS_data[, YEAR:= as.character(floor(DATE.OUT))]
+
+GBAHUISHOUDENS_data = GBAHUISHOUDENS_data[ order(RINPERSOON, -DATE.IN)]
+
+GBAHUISHOUDENS_data[,LIFEEVENTS_HUISHOUDENS := .N, by = .(RINPERSOON,YEAR)]
+
+GBAHUISHOUDENS_data = GBAHUISHOUDENS_data[ !duplicated(GBAHUISHOUDENS_data, by = c("RINPERSOON", "YEAR"), fromLast = T)]
+
+
+GBAHUISHOUDENS_data[, DATE.IN := NULL]
+GBAHUISHOUDENS_data[, DATE.OUT :=NULL]
+
+GBAHUISHOUDENS_data[, DATUMAANVANGHH := NULL]
+GBAHUISHOUDENS_data[, DATUMEINDEHH :=NULL]
+
+gc()
+
+# rm(GBAHUISHOUDENS_data)
+
+end_time = Sys.time()
+
+end_time - start_time
+```
+
+
+# 12. Add medication information (from medicijntab, which is based on Vectis declaration information)
+```{r}
+start_time = Sys.time()
+
+gc()
+
+Med_data = data.table()
+
+# loop for each year
+for(dir in med_primary_dirs){
+    
+  # define root folder with year included
+    sub_folder = list.files(paste(med_common_path,dir,sep=""))
+    
+    # do load the data if there is a file inside the folder
+    if (any(grepl("+.sav", sub_folder))) {
+      
+      # get the filename inside the folder
+      filename = sub_folder[grepl("+.sav", sub_folder)][length(sub_folder[grepl("+.sav", sub_folder)])]
+      # filename = paste(ZVWZORGKOSTENTAB_path, dir, "\\", filename, sep="")
+      
+      temp_data = as.data.table(read_spss(file = paste(med_common_path,dir,"\\",filename,sep=""), col_select = c(1:3) ))
+      
+      # remove RINPERSOONS column
+      temp_data = temp_data[,(1) := NULL]
+      
+      temp_data[, "YEAR" := dir]
+      
+      temp_data = temp_data[A, on=c("RINPERSOON"), nomatch =NULL]
+
+      Med_data = rbindlist(list(Med_data,temp_data))
+      rm(temp_data)
+      }
+}
+
+HVZ_ATC_2007 = c('A10A','A10B','A10C','B01A','C01B','C01C','C01E','C02K','C02N','C03A','C03B','C03C','C03D','C03E','C03X','C04A','C07A','C07B','C07C','C07D','C07E','C07F','C08C','C08D','C08E','C08G','C09A','C09B','C09C','C09D','C09X','C10A','C10B')
+DIA_TYPE2_ATC_2007 = c('A10B')
+BLOEDDRUKV_MED_ATC_2007 = c('C03*','C07*','C08*','C09*')
+CHOL_ATC_2007 = c('C10*')
+
+# Med_data = Med_data[ !duplicated(Med_data, by = c("RINPERSOON", "ATC4", "YEAR"), fromLast = T)]
+
+Med_data = as.data.table(aggregate(as.formula(paste0("ATC4 ~ RINPERSOON + YEAR")), data=Med_data,FUN = toString))
+
+Med_data[,UniqueMed := sapply(strsplit(ATC4,','),uniqueN)]
+
+gc()
+
+Med_data[, HVZ_MED := ifelse((grepl(paste0(HVZ_ATC_2007,collapse = "|"), ATC4, perl=TRUE)), 1, 0) ]
+Med_data[, DIAB_MED := ifelse((grepl(paste0(DIA_TYPE2_ATC_2007,collapse = "|"), ATC4, perl=TRUE)), 1, 0) ]
+Med_data[, BLOEDDRUKV_MED := ifelse((grepl(paste0(BLOEDDRUKV_MED_ATC_2007,collapse = "|"), ATC4, perl=TRUE)), 1, 0) ]
+Med_data[, CHOL_MED := ifelse((grepl(paste0(CHOL_ATC_2007,collapse = "|"), ATC4, perl=TRUE)), 1, 0) ]
+
+end_time = Sys.time()
+
+end_time - start_time
+```
+
+
+
+```{r}
+start_time = Sys.time()
+
+WANBZVWTAB_data = data.table()
+
+for (dir in WANBZVWTAB_folder_list) {
+
+  sub_folder_file = list.files(paste(WANBZVWTAB_path,dir,sep=""))
+
+  if(any(grepl("+.sav", sub_folder_file))){
+    filename = sub_folder_file[grepl("+.sav", sub_folder_file)][length(sub_folder_file[grepl("+.sav", sub_folder_file)])]
+    filename = paste(WANBZVWTAB_path, dir, "\\", filename, sep="")
+    temp_data = as.data.table(read_spss(file=paste(filename,sep=""), col_select = c(2)))
+
+    temp_data$YEAR = dir
+    temp_data$Wanbet = 1
+
+    temp_data = temp_data[A, on=c("RINPERSOON"), nomatch =NULL]
+
+    WANBZVWTAB_data = rbindlist(list(WANBZVWTAB_data, temp_data))
+
+    rm(temp_data)
+    gc()
+  }
+}
+
+end_time = Sys.time()
+
+end_time - start_time
+
+```
+
+
+
+
+```{r}
+
+WSNPPERSBUS_data = as.data.table(read_spss(paste(WSNPPERSBUS_path, WSNPPERSBUS_filename,sep=""), col_select = WSNPPERSBUS_select))
+
+WSNPPERSBUS_data = WSNPPERSBUS_data[A, on=c("RINPERSOON"), nomatch =NULL]
+
+WSNPPERSBUS_data$Wsnpdatumtoelaat = as.Date(WSNPPERSBUS_data$Wsnpdatumtoelaat, format= "%Y%m%d")
+
+WSNPPERSBUS_data$Wsnpdatumbeein = as.Date(WSNPPERSBUS_data$Wsnpdatumbeein, format= "%Y%m%d")
+
+WSNPPERSBUS_data = WSNPPERSBUS_data[, .(Date = seq(Wsnpdatumtoelaat,Wsnpdatumbeein,'month')), by = c("RINPERSOON","Wsnpdatumtoelaat", "Wsnpdatumbeein") ]
+
+# WSNPPERSBUS_data$YEAR = format(WSNPPERSBUS_data$Date, "%Y")
+
+WSNPPERSBUS_data[, YEAR := format(Date, format="%Y")]
+
+WSNPPERSBUS_data[, c("Wsnpdatumtoelaat", "Wsnpdatumbeein", "Date") :=NULL]
+
+WSNPPERSBUS_data = WSNPPERSBUS_data[ !duplicated(WSNPPERSBUS_data, by = c("RINPERSOON", "YEAR"), fromLast = T)]
+
+WSNPPERSBUS_data = WSNPPERSBUS_data[YEAR >= MIN_YEAR]
+WSNPPERSBUS_data[YEAR < MIN_YEAR, YEAR :=MIN_YEAR]
+WSNPPERSBUS_data[YEAR > MAX_YEAR, YEAR :=MAX_YEAR]
+WSNPPERSBUS_data = WSNPPERSBUS_data[ order(RINPERSOON, -YEAR)]
+WSNPPERSBUS_data = WSNPPERSBUS_data[ !duplicated(WSNPPERSBUS_data, by = c("RINPERSOON", "YEAR"), fromLast = T)]
+
+WSNPPERSBUS_data$WSNPPERSBUS = 1
+
+
+```
+
+
+```{r}
+start_time = Sys.time()
+
+GBAHUISHOUDENS_data = as.data.table(read_spss(paste(GBAHUISHOUDENS_path, GBAHUISHOUDENS_filename,sep=""), col_select = GBAHUISHOUDENS_select))
+
+GBAHUISHOUDENS_data = GBAHUISHOUDENS_data[A, on=c("RINPERSOON"), nomatch =NULL]
+
+GBAHUISHOUDENS_data$DATE.IN = decimal_date(as.Date(GBAHUISHOUDENS_data$DATUMAANVANGHH, format= "%Y%m%d"))
+
+GBAHUISHOUDENS_data$DATE.OUT = decimal_date(as.Date(GBAHUISHOUDENS_data$DATUMEINDEHH, format= "%Y%m%d"))
+
+GBAHUISHOUDENS_data = GBAHUISHOUDENS_data[DATE.OUT >= MIN_YEAR]
+GBAHUISHOUDENS_data[DATE.IN < MIN_YEAR, DATE.IN :=MIN_YEAR]
+GBAHUISHOUDENS_data[DATE.OUT > MAX_YEAR, DATE.OUT :=MAX_YEAR]
+
+GBAHUISHOUDENS_data[, YEAR:= as.character(floor(DATE.OUT))]
+
+GBAHUISHOUDENS_data = GBAHUISHOUDENS_data[ order(RINPERSOON, -DATE.IN)]
+
+GBAHUISHOUDENS_data[,LIFEEVENTS_HUISHOUDENS := .N, by = .(RINPERSOON,YEAR)]
+
+GBAHUISHOUDENS_data = GBAHUISHOUDENS_data[ !duplicated(GBAHUISHOUDENS_data, by = c("RINPERSOON", "YEAR"), fromLast = T)]
+
+
+GBAHUISHOUDENS_data[, DATE.IN := NULL]
+GBAHUISHOUDENS_data[, DATE.OUT :=NULL]
+
+GBAHUISHOUDENS_data[, DATUMAANVANGHH := NULL]
+GBAHUISHOUDENS_data[, DATUMEINDEHH :=NULL]
+
+gc()
+
+# rm(GBAHUISHOUDENS_data)
+
+end_time = Sys.time()
+
+end_time - start_time
+```
+
+
+
+
+```{r}
+start_time = Sys.time()
+
+# create an empty dataframe
+WMO_Data_CBS = data.table()
+
+A = unique(ADD_DATA$RINPERSOON)
+
+for(dir in WMO_primary_dirs){
+    
+  # define root folder with year included
+    sub_folder = (paste(WMO_common_path,dir,sep=""))
+    
+    
+    # do load the data if there is a file inside the folder
+    if (any(grepl("+.sav", sub_folder))) {
+      
+      # get the filename inside the folder
+      filename = sub_folder[grep("+.sav", sub_folder)][length(grep("+.sav", sub_folder))]
+
+      temp_data = as.data.table(read_spss(file = filename, col_select = c(2,8,9,10)))
+
+      temp_data = temp_data[A, on=c("RINPERSOON"), nomatch =NULL]
+      
+      temp_data$YEAR = substr(dir,4,7)
+
+      WMO_Data_CBS = rbindlist(list(WMO_Data_CBS,temp_data))
+      rm(temp_data)
+    }
+}
+
+WMO_Data = as.data.table(read_spss(file="H:\\Datavoorbereiding\\Frank\\Originele bestanden\\WMO-data\\WMO-kosten (upload uit 2020)\\8369_20200831KostenWmo_gebruik2017_2018_2019DenHaagCBKV1.sav", col_select = c(2:9)))
+
+WMO_Data[, YEAR := as.character(jaar)]
+WMO_Data[, jaar := NULL]
+
+WMO_Data_CBS[, FinancieringsvormWmo := na.locf(FinancieringsvormWmo, fromLast = TRUE, na.rm = FALSE), by=RINPERSOON]
+WMO_Data_CBS[, FinancieringsvormWmo := na.locf(FinancieringsvormWmo, na.rm = FALSE), by=RINPERSOON]
+
+
+#3. new variable needed for calculation with dates (here as decimal date)
+WMO_Data_CBS$BegindatumWmoin = decimal_date(as.Date(WMO_Data_CBS$BegindatumWmo, format = '%Y%m%d'))
+WMO_Data_CBS$EinddatumWmoin = decimal_date(as.Date(WMO_Data_CBS$EinddatumWmo, format = '%Y%m%d'))
+
+WMO_Data_CBS_min = as.data.table(Hmisc::summarize(WMO_Data_CBS$BegindatumWmoin, WMO_Data_CBS$RINPERSOON, min))
+
+setnames(WMO_Data_CBS_min, "WMO_Data_CBS$RINPERSOON", "RINPERSOON")
+setnames(WMO_Data_CBS_min, "WMO_Data_CBS$BegindatumWmoin", "BegindatumWmomin")
+
+WMO_Data_CBS_max =as.data.table(Hmisc::summarize(WMO_Data_CBS$EinddatumWmoin, WMO_Data_CBS$RINPERSOON, max))
+
+setnames(WMO_Data_CBS_max, "WMO_Data_CBS$RINPERSOON", "RINPERSOON")
+setnames(WMO_Data_CBS_max, "WMO_Data_CBS$EinddatumWmoin", "EinddatumWmomax")
+
+WMO_Data_CBS = merge(WMO_Data_CBS, WMO_Data_CBS_min,by = c("RINPERSOON"), all.x=T)
+
+WMO_Data_CBS = merge(WMO_Data_CBS, WMO_Data_CBS_max,by = c("RINPERSOON"), all.x=T)
+
+WMO_Data_CBS$BegindatumWmochrmin = format(date_decimal(WMO_Data_CBS$BegindatumWmomin),'%Y%m%d')
+WMO_Data_CBS$EinddatumWmochrmax = format(date_decimal(WMO_Data_CBS$EinddatumWmomax),'%Y%m%d')
+
+WMO_Data_CBS[BegindatumWmoin < MIN_YEAR, BegindatumWmo := paste0(MIN_YEAR,"0101")]
+WMO_Data_CBS[BegindatumWmoin < MIN_YEAR, BegindatumWmoin := MIN_YEAR]
+WMO_Data_CBS[BegindatumWmomin < MIN_YEAR, BegindatumWmomin := MIN_YEAR]
+
+WMO_Data_CBS[EinddatumWmoin > MAX_YEAR, EinddatumWmo := paste0(MAX_YEAR,"1231")]
+WMO_Data_CBS[EinddatumWmoin > MAX_YEAR, EinddatumWmoin := MAX_YEAR + 0.997]
+WMO_Data_CBS[EinddatumWmomax > MAX_YEAR, EinddatumWmomax := MAX_YEAR + 0.997]
+
+WMO_Data_CBS=WMO_Data_CBS[order(RINPERSOON,BegindatumWmoin)]
+
+WMO_Data_CBS = WMO_Data_CBS[!duplicated(WMO_Data_CBS,by=c("RINPERSOON","YEAR"),fromLast = T)]
+
+
+WMO_Data_All = merge(WMO_Data_CBS[,c('RINPERSOON','YEAR','FinancieringsvormWmo', 'BegindatumWmomin', 'EinddatumWmomax')], WMO_Data,by = c("RINPERSOON","YEAR"), all.x= T, allow.cartesian = T)
+
+
+WMO_Data_All[ , Wmo_ind := 1]
+WMO_Data_All[ as.numeric(YEAR) == BegindatumWmomin, first_Wmo_ind := 1]
+
+
+
+rm(WMO_Data_CBS)
+rm(WMO_Data_CBS_min)
+rm(WMO_Data_CBS_max)
+rm(WMO_Data)
+
+
+end_time = Sys.time()
+
+end_time - start_time
+```
+
+
+
+
+```{r}
+start_time = Sys.time()
+
+# create an empty dataframe
+WLZ_Data_CBS = data.table()
+
+A = unique(ADD_DATA$RINPERSOON)
+
+for(dir in Wlz_primary_dirs){
+    
+  # define root folder with year included
+    sub_folder = (paste(Wlz_common_path,dir,sep=""))
+    
+    
+    # do load the data if there is a file inside the folder
+    if (any(grepl("+.sav", sub_folder))) {
+      
+      # get the filename inside the folder
+      filename = sub_folder[grep("+.sav", sub_folder)][length(grep("+.sav", sub_folder))]
+
+      temp_data = as.data.table(read_spss(file = filename, col_select = c(2,3,4,5)))
+
+      temp_data = temp_data[A, on=c("RINPERSOON"), nomatch =NULL]
+      
+      temp_data$YEAR = substr(dir,7,10)
+
+      WLZ_Data_CBS = rbindlist(list(WLZ_Data_CBS,temp_data))
+      rm(temp_data)
+    }
+}
+
+end_time = Sys.time()
+
+end_time - start_time
+
+
+
+WLZ_Data = as.data.table(fread(file="H:\\Datavoorbereiding\\Frank\\Originele bestanden\\WLZ-kosten inschatting (Nicole)\\schatting_wlz_kosten_20210414.csv",dec = ","))
+
+WLZ_Data[, RINPERSOON := ifelse(nchar(RINPERSOON) < 9, paste0(strrep("0",times= 9 - nchar(RINPERSOON)),RINPERSOON),RINPERSOON)]
+
+WLZ_Data = melt(WLZ_Data, measure = patterns("WLZ_uitgaven_"), variable.name = "YEAR", value.name = c("WLZ_uitgaven"))
+
+WLZ_Data[, YEAR := as.character(YEAR)]
+
+WLZ_Data[, YEAR := substr(YEAR, 14,17)]
+
+WLZ_Data[, V1 := NULL]
+
+
+WLZ_Data_CBS[, WLZLEVERINGSVORM := na.locf(WLZLEVERINGSVORM, fromLast = TRUE, na.rm = FALSE), by=RINPERSOON]
+WLZ_Data_CBS[, WLZLEVERINGSVORM := na.locf(WLZLEVERINGSVORM, na.rm = FALSE), by=RINPERSOON]
+
+
+#3. new variable needed for calculation with dates (here as decimal date)
+WLZ_Data_CBS$BegindatumWlzin = decimal_date(as.Date(WLZ_Data_CBS$BEGINWLZGEB, format = '%Y%m%d'))
+WLZ_Data_CBS$EinddatumWlzin = decimal_date(as.Date(WLZ_Data_CBS$EINDEWLZGEB, format = '%Y%m%d'))
+
+WLZ_Data_CBS_min = as.data.table(Hmisc::summarize(WLZ_Data_CBS$BegindatumWlzin, WLZ_Data_CBS$RINPERSOON, min))
+
+setnames(WLZ_Data_CBS_min, "WLZ_Data_CBS$RINPERSOON", "RINPERSOON")
+setnames(WLZ_Data_CBS_min, "WLZ_Data_CBS$BegindatumWlzin", "BegindatumWlzmin")
+
+WLZ_Data_CBS_max =as.data.table(Hmisc::summarize(WLZ_Data_CBS$EinddatumWlzin, WLZ_Data_CBS$RINPERSOON, max))
+
+setnames(WLZ_Data_CBS_max, "WLZ_Data_CBS$RINPERSOON", "RINPERSOON")
+setnames(WLZ_Data_CBS_max, "WLZ_Data_CBS$EinddatumWlzin", "EinddatumWlzmax")
+
+WLZ_Data_CBS = merge(WLZ_Data_CBS, WLZ_Data_CBS_min,by = c("RINPERSOON"), all.x=T)
+
+WLZ_Data_CBS = merge(WLZ_Data_CBS, WLZ_Data_CBS_max,by = c("RINPERSOON"), all.x=T)
+
+WLZ_Data_CBS$BegindatumWlzchrmin = format(date_decimal(WLZ_Data_CBS$BegindatumWlzmin),'%Y%m%d')
+WLZ_Data_CBS$EinddatumWlzchrmax = format(date_decimal(WLZ_Data_CBS$EinddatumWlzmax),'%Y%m%d')
+
+
+WLZ_Data_CBS[BegindatumWlzin < MIN_YEAR, BegindatumWlz := paste0(MIN_YEAR,"0101")]
+WLZ_Data_CBS[BegindatumWlzin < MIN_YEAR, BegindatumWlzin := MIN_YEAR]
+WLZ_Data_CBS[BegindatumWlzmin < MIN_YEAR, BegindatumWlzmin := MIN_YEAR]
+
+WLZ_Data_CBS[EinddatumWlzin > MAX_YEAR, EinddatumWlz := paste0(MAX_YEAR,"1231")]
+WLZ_Data_CBS[EinddatumWlzin > MAX_YEAR, EinddatumWlzin := MAX_YEAR + 0.997]
+WLZ_Data_CBS[EinddatumWlzmax >MAX_YEAR, EinddatumWlzmax := MAX_YEAR + 0.997]
+
+WLZ_Data_CBS=WLZ_Data_CBS[order(RINPERSOON,BegindatumWlzin)]
+
+WLZ_Data_CBS = WLZ_Data_CBS[!duplicated(WLZ_Data_CBS,by=c("RINPERSOON","YEAR"),fromLast = T)]
+
+
+WLZ_Data_All = merge(WLZ_Data_CBS[,c('RINPERSOON','YEAR','WLZLEVERINGSVORM', 'BegindatumWlzmin', 'EinddatumWlzmax')], WLZ_Data,by = c("RINPERSOON","YEAR"), all.x= T, allow.cartesian = T)
+
+WLZ_Data_All[ , Wlz_ind := 1]
+WLZ_Data_All[ as.numeric(YEAR) == BegindatumWlzmin, first_Wlz_ind := 1]
+
+
+
+
+rm(WLZ_Data_CBS)
+rm(WLZ_Data_CBS_min)
+rm(WLZ_Data_CBS_max)
+rm(WLZ_Data)
+
+end_time = Sys.time()
+
+
+end_time - start_time
+```
+
+```{r}
+unique(ADD_DATA$YEAR)
+
+# unique(DBC_data_all$YEAR)
+unique(DBC_data_first$YEAR)
+
+unique(GBAHUISHOUDENS_data$YEAR)
+
+unique(INHATAB_data$YEAR)
+unique(INPATAB_data$YEAR)
+
+unique(Med_data$YEAR)
+unique(WANBZVWTAB_data$YEAR)
+
+unique(WLZ_Data_All$YEAR)
+unique(WMO_Data_All$YEAR)
+unique(WSNPPERSBUS_data$YEAR)
+
+unique(ZVWZORGKOSTENTAB_data$YEAR)
+
+```
+
+
+
+```{r}
+print("ADD_DATA")
+colnames(ADD_DATA)
+print("DBC_data_all")
+colnames(DBC_data_all)
+print("DBC_data_First")
+colnames(DBC_data_first)
+print("INHATAB_data")
+colnames(INHATAB_data)
+print("INPATAB_data")
+colnames(INPATAB_data)
+print("Med_data")
+colnames(Med_data)
+print("ZVWZORGKOSTENTAB_data")
+colnames(ZVWZORGKOSTENTAB_data)
+print("WANBZVWTAB_data")
+colnames(WANBZVWTAB_data)
+print("WSNPPERSBUS_data")
+colnames(WSNPPERSBUS_data)
+print("WMO_Data_All")
+colnames(WMO_Data_All)
+print("WLZ_Data_All")
+colnames(WLZ_Data_All)
+```
+
+
+
+
+## 11. merge all the data
+```{r}
+start_time = Sys.time()
+
+
+INPATAB_data = merge(INPATAB_data, INHATAB_data, by = c("RINPERSOONHKW","YEAR"), allow.cartesian = T)
+
+rm(INHATAB_data)
+gc()
+
+ADD_DATA = merge(ADD_DATA,GBAHUISHOUDENS_data,by = c("RINPERSOON","YEAR"), all.x=T, allow.cartesian = T)
+
+rm(GBAHUISHOUDENS_data)
+gc()
+
+ADD_DATA = merge(ADD_DATA,INPATAB_data,by = c("RINPERSOON","YEAR"), all.x=T, allow.cartesian = T)
+
+rm(INPATAB_data)
+gc()
+
+ADD_DATA = merge(ADD_DATA,ZVWZORGKOSTENTAB_data,by = c("RINPERSOON","YEAR"), all.x=T, allow.cartesian = T)
+
+rm(ZVWZORGKOSTENTAB_data)
+gc()
+
+
+ADD_DATA = merge(ADD_DATA,DBC_data_all,by = c("RINPERSOON"), all.x=T, allow.cartesian = T)
+rm(DBC_data_all)
+gc()
+ADD_DATA = merge(ADD_DATA,DBC_data_first,by = c("RINPERSOON","YEAR"), all.x=T, allow.cartesian = T)
+rm(DBC_data_first)
+gc()
+ADD_DATA = merge(ADD_DATA,Med_data,by = c("RINPERSOON","YEAR"), all.x=T, allow.cartesian = T)
+rm(Med_data)
+gc()
+ADD_DATA = merge(ADD_DATA,WANBZVWTAB_data,by = c("RINPERSOON","YEAR"), all.x=T, allow.cartesian = T)
+rm(WANBZVWTAB_data)
+gc()
+ADD_DATA = merge(ADD_DATA,WSNPPERSBUS_data,by = c("RINPERSOON","YEAR"), all.x=T, allow.cartesian = T)
+rm(WSNPPERSBUS_data)
+gc()
+ADD_DATA = merge(ADD_DATA, WLZ_Data_All,by = c("RINPERSOON","YEAR"), all.x= T, allow.cartesian = T)
+rm(WLZ_Data_All)
+gc()
+ADD_DATA = merge(ADD_DATA, WMO_Data_All,by = c("RINPERSOON","YEAR"), all.x= T, allow.cartesian = T)
+rm(WMO_Data_All)
+gc()
+
+ADD_DATA[,c("GBADATUMAANVANGADRESHOUDINGin", "GBADATUMEINDEADRESHOUDINGin", "RINOBJECTNUMMER", "GBADATUMAANVANGADRESHOUDING", "GBADATUMEINDEADRESHOUDING", "GBADATUMAANVANGADRESHOUDING2", "GBADATUMEINDEADRESHOUDING2", "RINPERSOONHKW", "BegindatumWlzmin", "EinddatumWlzmax", "BegindatumWmomin", "EinddatumWmomax") := NULL]
+
+end_time = Sys.time()
+
+end_time - start_time
+```
+
+
+
+
+
+```{r}
+start_time = Sys.time()
+
+# colcovariate = c("wc","bc","gem","GBAGESLACHT","GBAHERKOMSTGROEPERING","GBAGENERATIE","GBAGEBOORTEDATUM")
+# ADD_DATA[,(colcovariate) := lapply(.SD, function(x) na.locf(x, fromLast = T, na.rm = F)), by = c("RINPERSOON"), .SDcols = colcovariate]
+# ADD_DATA[,(colcovariate) := lapply(.SD, function(x) na.locf(x, na.rm = F)), by = c("RINPERSOON"), .SDcols = colcovariate]
+
+ADD_DATA[, GBADatumOverlijden := na.locf(GBADatumOverlijden, na.rm = FALSE), by=RINPERSOON]
+
+ADD_DATA[, GBADatumOverlijden := na.locf(GBADatumOverlijden, fromLast = T, na.rm = FALSE), by=RINPERSOON]
+
+
+ADD_DATA = ADD_DATA[!duplicated(ADD_DATA,by=c("RINPERSOON", "YEAR"), fromLast = T)]
+
+ADD_DATA[, AGE := (as.numeric(YEAR) - decimal_date(as.Date(GBAGEBOORTEDATUM, format = '%Y%m%d')))]
+
+ADD_DATA[AGE<0, AGE:= 0]
+ADD_DATA[INHGESTINKH > 99999999, INHGESTINKH := NA ]
+
+ADD_DATA[,Gender:=sjlabelled::as_label(GBAGESLACHT)]
+ADD_DATA[,AGE_CAT := cut(AGE,c(0,5,10,20,30,40,50,60,70,80,Inf),c("0to5","6to10","11to20","21to30","31to40","41to50","51to60","61to70","71to80",">81"))]
+
+
+ADD_DATA = ADD_DATA %>% mutate(HouseholdType = recode_factor(TYPHH, "1"= "Single Household", "2"= "Not Married", "3"= "Married", "4"= "Not Married", "5"= "Married", "6"= "Single Parent", "8"= "Institutional" , .default = "Unknown"))
+
+ADD_DATA[, Multiperson := ifelse( (INHAHL > 1) | (AANTALPERSHH >1), 1,0)]
+
+eth_code = as.data.table(read_spss("K:\\Utilities\\Code_Listings\\SSBreferentiebestanden\\LANDAKTUEELREFV13.sav"))[,c(1,3,9)]
+
+names(eth_code)[1]= "GBAHERKOMSTGROEPERING"
+
+eth_code[, GBAHERKOMSTGROEPERING := as.character(GBAHERKOMSTGROEPERING)]
+eth_code[GBAHERKOMSTGROEPERING == "6030", LANDTYPE := 3]
+eth_code[,MinorEthnicity:=sjlabelled::as_label(ETNGRP)]
+
+ADD_DATA = merge(ADD_DATA, eth_code, by= c("GBAHERKOMSTGROEPERING"), all.x = T)
+
+ADD_DATA = ADD_DATA %>% mutate(MajorEthnicity = recode_factor(LANDTYPE, "3"="Native Dutch", "1" = "Western", "2"= "Non-Western", .default = "Unknown"))
+
+ADD_DATA[, ZVWKHUISARTS_NO_REG := (ZVWKHUISARTS - NOPZVWKHUISARTSINSCHRIJF) ]
+ADD_DATA[, ZVWKHUISARTS_CAT := ifelse( ((ZVWKHUISARTS - NOPZVWKHUISARTSINSCHRIJF)  >0), 1,0)]
+ADD_DATA[, ZVWKFARMACIE_CAT := ifelse( (ZVWKFARMACIE >0), 1,0)]
+ADD_DATA[, ZVWKMONDZORG_CAT := ifelse( (ZVWKMONDZORG >0), 1,0)]
+ADD_DATA[, ZVWKZIEKENHUIS_CAT := ifelse( (ZVWKZIEKENHUIS >0), 1,0)]
+ADD_DATA[, ZVWKOSTENPSYCHO_CAT := ifelse( (ZVWKOSTENPSYCHO >0), 1,0)]
+ADD_DATA[, NOPZVWKHUISARTSCONSULT_CAT := ifelse( (NOPZVWKHUISARTSCONSULT >0), 1,0)]
+
+ADD_DATA[, LIFEEVENTS_ALL := LIFEEVENTS_MOVING + LIFEEVENTS_HUISHOUDENS]
+
+ADD_DATA[INPT3170RBW == 9999999999, INPT3170RBW:=NA]
+ADD_DATA[INPT3180RST == 9999999999, INPT3180RST:=NA]
+ADD_DATA[INPT3190RBS == 9999999999, INPT3190RBS:=NA]
+
+ADD_DATA[, FUNC_DEBT := ifelse( (INPT3170RBW >0) | (INPT3180RST >0) | (INPT3190RBS >0), 1,0)]
+
+ADD_DATA[, Laag_inkomen := ifelse( (INHARMLAG < 100)&(INHARMLAG>0), 1, 0)]
+
+ADD_DATA[, UniqueMed_CAT:= ifelse( (UniqueMed>=5), 1,0)]
+
+ADD_DATA[, Ext_UniqueMed_CAT:= ifelse( (UniqueMed>=10), 1,0)]
+
+ADD_DATA[,wc_name:=sjlabelled::as_label(wc)]
+
+ADD_DATA[, LIFEEVENTS_MOVING_CAT := ifelse( (LIFEEVENTS_MOVING >1), 1,0)]
+ADD_DATA[, LIFEEVENTS_HUISHOUDENS_CAT := ifelse( (LIFEEVENTS_HUISHOUDENS >1), 1,0)]
+ADD_DATA[, LIFEEVENTS_ALL_CAT := ifelse( (LIFEEVENTS_ALL >2), 1,0)]
+
+ADD_DATA = ADD_DATA[order(RINPERSOON,YEAR)]
+
+end_time = Sys.time()
+
+end_time - start_time
+```
+
+```{r}
+unique(ADD_DATA$gem)
+```
+
+
+```{r}
+names(ADD_DATA)
+
+gc()
+```
+```{r}
+unique(ADD_DATA$YEAR)
+```
+
+```{r}
+ADD_DATA
+```
+
+
+```{r}
+
+
+Numeric_Columns =c("LIFEEVENTS_MOVING", "LIFEEVENTS_HUISHOUDENS", "LIFEEVENTS_ALL","AANTALPERSHH", "INHAHL", "INHGESTINKH", "ZVWKHUISARTS", "ZVWKHUISARTS_NO_REG", "ZVWKFARMACIE", "ZVWKMONDZORG", "ZVWKZIEKENHUIS", "ZVWKPARAMEDISCH", "ZVWKHULPMIDDEL", "ZVWKZIEKENVERVOER", "ZVWKGEBOORTEZORG", "ZVWKBUITENLAND", "ZVWKOVERIG","ZVWKEERSTELIJNSPSYCHO","ZVWKGGZ","ZVWKGENBASGGZ","ZVWKSPECGGZ", "ZVWKGERIATRISCH","ZVWKWYKVERPLEGING","NOPZVWKHUISARTSINSCHRIJF","NOPZVWKHUISARTSCONSULT","NOPZVWKHUISARTSOVERIG", "ZVWKOSTENTOTAAL", "ZVWKOSTENPSYCHO","UniqueMed", "WLZ_uitgaven", "Wmo_totaal", "AGE")
+
+DT_Pop = ADD_DATA[,.N,by=c("wc","wc_name","YEAR")][order(wc,YEAR)]
+DT_Pop[,N:=round(N/10)*10]
+DT_Pop[N <11,N:=0]
+# DT_Pop[N <11,N:=sample(15:35,size=length(DT_Pop[N <11]$N),replace=T)]
+
+DT_MEAN = ADD_DATA[,lapply(.SD,mean,na.rm=T), by=c("wc","wc_name","YEAR"),.SDcols=Numeric_Columns][order(wc,YEAR)]
+DT_MEAN = merge(DT_Pop,DT_MEAN,by = c("wc","wc_name","YEAR"))
+DT_MEAN = DT_MEAN[order(wc, YEAR, N)]
+# DT_MEAN[N<11, c("N",Numeric_Columns)] = floor(runif(1,min=13,max=25))
+DT_MEAN[is.na(DT_MEAN)] = 0
+
+DT_SD = ADD_DATA[,lapply(.SD,sd,na.rm=T), by=c("wc","wc_name","YEAR"),.SDcols=Numeric_Columns][order(wc,YEAR)]
+DT_SD = merge(DT_Pop,DT_SD,by = c("wc","wc_name","YEAR"))
+DT_SD = DT_SD[order(wc, YEAR, N)]
+# DT_SD[N<11, c("N",Numeric_Columns)] = floor(runif(1,min=13,max=25))
+DT_SD[is.na(DT_SD)] = 0
+
+DT_SUM = ADD_DATA[,lapply(.SD,sum,na.rm=T), by=c("wc","wc_name","YEAR"),.SDcols=Numeric_Columns][order(wc,YEAR)]
+DT_SUM = merge(DT_Pop,DT_SUM,by = c("wc","wc_name","YEAR"))
+DT_SUM = DT_SUM[order(wc, YEAR, N)]
+# DT_SUM[N<11, c("N",Numeric_Columns)] = floor(runif(1,min=13,max=25))
+DT_SUM[is.na(DT_SUM)] = 0
+
+DT_MED = ADD_DATA[,lapply(.SD,median,na.rm=T), by=c("wc","wc_name","YEAR"),.SDcols=Numeric_Columns][order(wc,YEAR)]
+DT_MED = merge(DT_Pop,DT_MED,by = c("wc","wc_name","YEAR"))
+DT_MED = DT_MED[order(wc, YEAR, N)]
+# DT_MED[N<11, c("N",Numeric_Columns)] = floor(runif(1,min=13,max=25))
+DT_MED[is.na(DT_MED)] = 0
+
+list_of_data = list("DT_MEAN"=DT_MEAN,"DT_SD"=DT_SD,"DT_SUM"=DT_SUM,"DT_MED"=DT_MED)
+openxlsx::write.xlsx(list_of_data, file = "H:/Datavoorbereiding/Faiq/HADOKS/HADOKS_Numeric ver 2.xlsx")
+
+```
+
+
+
+
+```{r}
+DT_Pop = ADD_DATA[,.N,by=c("wc","wc_name","YEAR")][order(wc,YEAR)]
+DT_Pop[,N:=round(N/10)*10]
+DT_Pop[N <11,N:=0]
+# DT_Pop[N <11,N:=sample(15:35,size=length(DT_Pop[N <11]$N),replace=T)]
+
+DT_Gender = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","Gender")] 
+
+# DT_Gender[is.na(N),N:=0]
+DT_Gender[,N:=round(N/5)*5]
+DT_Gender[N <11,N:=0]
+# DT_Gender[N <11,N:=sample(15:35,size=length(DT_Gender[N <11]$N),replace=T)]
+DT_Gender[,Gender:= paste0("Gender_",Gender)] 
+DT_Gender = DT_Gender %>% dcast(wc+wc_name+YEAR~Gender)
+
+
+DT_AGECAT = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","AGE_CAT")]
+
+# DT_AGECAT[is.na(N),N:=0]
+DT_AGECAT[,N:=round(N/5)*5]
+DT_AGECAT[N <11,N:=0]
+# DT_AGECAT[N <11,N:=sample(15:35,size=length(DT_AGECAT[N <11]$N),replace=T)]
+DT_AGECAT[,AGE_CAT:= paste0("AGE_CAT_",AGE_CAT)]
+DT_AGECAT = DT_AGECAT %>% dcast(wc+wc_name+YEAR~AGE_CAT)
+
+
+DT_MinorEthnicity = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","MinorEthnicity")]
+
+# DT_MinorEthnicity[is.na(N),N:=0]
+DT_MinorEthnicity[,N:=round(N/5)*5]
+DT_MinorEthnicity[N <11,N:=0]
+# DT_MinorEthnicity[N <11,N:=sample(15:35,size=length(DT_MinorEthnicity[N <11]$N),replace=T)]
+DT_MinorEthnicity[,MinorEthnicity:= paste0("MinorEthnicity_",MinorEthnicity)]
+DT_MinorEthnicity = DT_MinorEthnicity %>% dcast(wc+wc_name+YEAR~MinorEthnicity)
+
+
+DT_MajorEthnicity = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","MajorEthnicity")]
+
+# DT_MajorEthnicity[is.na(N),N:=0]
+DT_MajorEthnicity[,N:=round(N/5)*5]
+DT_MajorEthnicity[N <11,N:=0]
+# DT_MajorEthnicity[N <11,N:=sample(15:35,size=length(DT_MajorEthnicity[N <11]$N),replace=T)]
+DT_MajorEthnicity[,MajorEthnicity:= paste0("MajorEthnicity_",MajorEthnicity)]
+DT_MajorEthnicity = DT_MajorEthnicity %>% dcast(wc+wc_name+YEAR~MajorEthnicity)
+
+
+DT_PERSON = merge(DT_Pop,DT_Gender,by = c("wc","wc_name","YEAR"))
+DT_PERSON = merge(DT_PERSON,DT_AGECAT,by = c("wc","wc_name","YEAR"))
+DT_PERSON = merge(DT_PERSON,DT_MinorEthnicity,by = c("wc","wc_name","YEAR"))
+DT_PERSON = merge(DT_PERSON,DT_MajorEthnicity,by = c("wc","wc_name","YEAR"))
+
+DT_PERSON[is.na(DT_PERSON)] = 0
+
+# Number_columns = colnames(DT_PERSON)[!(colnames(DT_PERSON) %in% c("wc","wc_name","YEAR"))]
+# DT_PERSON[, (Number_columns) := replace(.SD,.SD<11, floor(runif(1,min=13,max=35))), .SDcols = Number_columns]
+# 
+
+# rm(DT_Pop)
+rm(DT_Gender)
+rm(DT_AGECAT)
+rm(DT_MajorEthnicity)
+rm(DT_MinorEthnicity)
+gc()
+
+
+DT_TYPHH = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","TYPHH")]
+
+# DT_TYPHH[is.na(N),N:=0]
+DT_TYPHH[,N:=round(N/5)*5]
+DT_TYPHH[N <11,N:=0]
+# DT_TYPHH[N <11,N:=sample(15:35,size=length(DT_TYPHH[N <11]$N),replace=T)]
+DT_TYPHH[,TYPHH:= paste0("TYPHH_",TYPHH)]
+DT_TYPHH = DT_TYPHH %>% dcast(wc+wc_name+YEAR~TYPHH)
+
+DT_Multiperson = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","Multiperson")]
+
+# DT_Multiperson[is.na(N),N:=0]
+DT_Multiperson[,N:=round(N/5)*5]
+DT_Multiperson[N <11,N:=0]
+# DT_Multiperson[N <11,N:=sample(15:35,size=length(DT_Multiperson[N <11]$N),replace=T)]
+DT_Multiperson[,Multiperson:= paste0("Multiperson_",Multiperson)]
+DT_Multiperson = DT_Multiperson %>% dcast(wc+wc_name+YEAR~Multiperson)
+
+DT_HouseholdType = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","HouseholdType")]
+
+# DT_HouseholdType[is.na(N),N:=0]
+DT_HouseholdType[,N:=round(N/5)*5]
+DT_HouseholdType[N <11,N:=0]
+# DT_HouseholdType[N <11,N:=sample(15:35,size=length(DT_HouseholdType[N <11]$N),replace=T)]
+DT_HouseholdType[,HouseholdType:= paste0("HouseholdType_",HouseholdType)]
+DT_HouseholdType = DT_HouseholdType %>% dcast(wc+wc_name+YEAR~HouseholdType)
+
+DT_INPSECJ = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","INPSECJ")]
+
+# DT_INPSECJ[is.na(N),N:=0]
+DT_INPSECJ[,N:=round(N/5)*5]
+DT_INPSECJ[N <11,N:=0]
+# DT_INPSECJ[N <11,N:=sample(15:35,size=length(DT_INPSECJ[N <11]$N),replace=T)]
+DT_INPSECJ[,INPSECJ:= paste0("INPSECJ_",INPSECJ)]
+DT_INPSECJ = DT_INPSECJ %>% dcast(wc+wc_name+YEAR~INPSECJ)
+
+DT_LIFEEVENTS_MOVING_CAT = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","LIFEEVENTS_MOVING_CAT")]
+
+# DT_LIFEEVENTS_MOVING_CAT[is.na(N),N:=0]
+DT_LIFEEVENTS_MOVING_CAT[,N:=round(N/5)*5]
+DT_LIFEEVENTS_MOVING_CAT[N <11,N:=0]
+# DT_LIFEEVENTS_MOVING_CAT[N <11,N:=sample(15:35,size=length(DT_LIFEEVENTS_MOVING_CAT[N <11]$N),replace=T)]
+DT_LIFEEVENTS_MOVING_CAT[,LIFEEVENTS_MOVING_CAT:= paste0("LIFEEVENTS_MOVING_CAT_",LIFEEVENTS_MOVING_CAT)]
+DT_LIFEEVENTS_MOVING_CAT = DT_LIFEEVENTS_MOVING_CAT %>% dcast(wc+wc_name+YEAR~LIFEEVENTS_MOVING_CAT)
+
+DT_LIFEEVENTS_HUISHOUDENS_CAT = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","LIFEEVENTS_HUISHOUDENS_CAT")]
+
+# DT_LIFEEVENTS_HUISHOUDENS_CAT[is.na(N),N:=0]
+DT_LIFEEVENTS_HUISHOUDENS_CAT[,N:=round(N/5)*5]
+DT_LIFEEVENTS_HUISHOUDENS_CAT[N <11,N:=0]
+# DT_LIFEEVENTS_HUISHOUDENS_CAT[N <11,N:=sample(15:35,size=length(DT_LIFEEVENTS_HUISHOUDENS_CAT[N <11]$N),replace=T)]
+DT_LIFEEVENTS_HUISHOUDENS_CAT[,LIFEEVENTS_HUISHOUDENS_CAT:= paste0("LIFEEVENTS_HUISHOUDENS_CAT_",LIFEEVENTS_HUISHOUDENS_CAT)]
+DT_LIFEEVENTS_HUISHOUDENS_CAT = DT_LIFEEVENTS_HUISHOUDENS_CAT %>% dcast(wc+wc_name+YEAR~LIFEEVENTS_HUISHOUDENS_CAT)
+
+DT_LIFEEVENTS_ALL_CAT = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","LIFEEVENTS_ALL_CAT")]
+
+# DT_LIFEEVENTS_ALL_CAT[is.na(N),N:=0]
+DT_LIFEEVENTS_ALL_CAT[,N:=round(N/5)*5]
+DT_LIFEEVENTS_ALL_CAT[N <11,N:=0]
+# DT_LIFEEVENTS_ALL_CAT[N <11,N:=sample(15:35,size=length(DT_LIFEEVENTS_ALL_CAT[N <11]$N),replace=T)]
+DT_LIFEEVENTS_ALL_CAT[,LIFEEVENTS_ALL_CAT:= paste0("LIFEEVENTS_ALL_CAT_",LIFEEVENTS_ALL_CAT)]
+DT_LIFEEVENTS_ALL_CAT = DT_LIFEEVENTS_ALL_CAT %>% dcast(wc+wc_name+YEAR~LIFEEVENTS_ALL_CAT)
+
+DT_Household_Events = merge(DT_Pop,DT_Multiperson,by = c("wc","wc_name","YEAR"))
+DT_Household_Events = merge(DT_Household_Events,DT_TYPHH,by = c("wc","wc_name","YEAR"))
+DT_Household_Events = merge(DT_Household_Events,DT_HouseholdType,by = c("wc","wc_name","YEAR"))
+DT_Household_Events = merge(DT_Household_Events,DT_INPSECJ,by = c("wc","wc_name","YEAR"))
+DT_Household_Events = merge(DT_Household_Events,DT_LIFEEVENTS_MOVING_CAT,by = c("wc","wc_name","YEAR"))
+DT_Household_Events = merge(DT_Household_Events,DT_LIFEEVENTS_HUISHOUDENS_CAT,by = c("wc","wc_name","YEAR"))
+DT_Household_Events = merge(DT_Household_Events,DT_LIFEEVENTS_ALL_CAT,by = c("wc","wc_name","YEAR"))
+
+DT_Household_Events[is.na(DT_Household_Events)] = 0
+
+# Number_columns = colnames(DT_Household_Events)[!(colnames(DT_Household_Events) %in% c("wc","wc_name","YEAR"))]
+# DT_Household_Events[, (Number_columns) := replace(.SD,.SD<11, floor(runif(1,min=13,max=25))), .SDcols = Number_columns]
+
+rm(DT_TYPHH)
+rm(DT_Multiperson)
+rm(DT_HouseholdType)
+rm(DT_INPSECJ)
+rm(DT_LIFEEVENTS_MOVING)
+rm(DT_LIFEEVENTS_HUISHOUDENS)
+rm(DT_LIFEEVENTS_ALL)
+gc()
+
+
+DT_INHSAMAOW = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","INHSAMAOW")]
+
+# DT_INHSAMAOW[is.na(N),N:=0]
+DT_INHSAMAOW[,N:=round(N/5)*5]
+DT_INHSAMAOW[N <11,N:=0]
+# DT_INHSAMAOW[N <11,N:=sample(15:35,size=length(DT_INHSAMAOW[N <11]$N),replace=T)]
+DT_INHSAMAOW[,INHSAMAOW:= paste0("INHSAMAOW_",INHSAMAOW)]
+DT_INHSAMAOW = DT_INHSAMAOW %>% dcast(wc+wc_name+YEAR~INHSAMAOW)
+
+DT_Laag_inkomen = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","Laag_inkomen")]
+
+# DT_Laag_inkomen[is.na(N),N:=0]
+DT_Laag_inkomen[,N:=round(N/5)*5]
+DT_Laag_inkomen[N <11,N:=0]
+# DT_Laag_inkomen[N <11,N:=sample(15:35,size=length(DT_Laag_inkomen[N <11]$N),replace=T)]
+DT_Laag_inkomen[,Laag_inkomen:= paste0("Laag_inkomen_",Laag_inkomen)]
+DT_Laag_inkomen = DT_Laag_inkomen %>% dcast(wc+wc_name+YEAR~Laag_inkomen)
+
+DT_FUNC_DEBT = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","FUNC_DEBT")]
+
+# DT_FUNC_DEBT[is.na(N),N:=0]
+DT_FUNC_DEBT[,N:=round(N/5)*5]
+DT_FUNC_DEBT[N <11,N:=0]
+# DT_FUNC_DEBT[N <11,N:=sample(15:35,size=length(DT_FUNC_DEBT[N <11]$N),replace=T)]
+DT_FUNC_DEBT[,FUNC_DEBT:= paste0("FUNC_DEBT_",FUNC_DEBT)]
+DT_FUNC_DEBT = DT_FUNC_DEBT %>% dcast(wc+wc_name+YEAR~FUNC_DEBT)
+
+DT_WSNPPERSBUS = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","WSNPPERSBUS")]
+
+# DT_WSNPPERSBUS[is.na(N),N:=0]
+DT_WSNPPERSBUS[,N:=round(N/5)*5]
+DT_WSNPPERSBUS[N <11,N:=0]
+# DT_WSNPPERSBUS[N <11,N:=sample(15:35,size=length(DT_WSNPPERSBUS[N <11]$N),replace=T)]
+DT_WSNPPERSBUS[,WSNPPERSBUS:= paste0("WSNPPERSBUS_",WSNPPERSBUS)]
+DT_WSNPPERSBUS = DT_WSNPPERSBUS %>% dcast(wc+wc_name+YEAR~WSNPPERSBUS)
+
+DT_Wanbet = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","Wanbet")]
+
+# DT_Wanbet[is.na(N),N:=0]
+DT_Wanbet[,N:=round(N/5)*5]
+DT_Wanbet[N <11,N:=0]
+# DT_Wanbet[N <11,N:=sample(15:35,size=length(DT_Wanbet[N <11]$N),replace=T)]
+DT_Wanbet[,Wanbet:= paste0("Wanbet_",Wanbet)]
+DT_Wanbet = DT_Wanbet %>% dcast(wc+wc_name+YEAR~Wanbet)
+
+DT_SocioEcon = merge(DT_Pop,DT_Laag_inkomen,by = c("wc","wc_name","YEAR"))
+DT_SocioEcon = merge(DT_SocioEcon,DT_INHSAMAOW,by = c("wc","wc_name","YEAR"))
+DT_SocioEcon = merge(DT_SocioEcon,DT_FUNC_DEBT,by = c("wc","wc_name","YEAR"))
+DT_SocioEcon = merge(DT_SocioEcon,DT_WSNPPERSBUS,by = c("wc","wc_name","YEAR"))
+DT_SocioEcon = merge(DT_SocioEcon,DT_Wanbet,by = c("wc","wc_name","YEAR"))
+
+DT_SocioEcon[is.na(DT_SocioEcon)] = 0
+
+# Number_columns = colnames(DT_SocioEcon)[!(colnames(DT_SocioEcon) %in% c("wc","wc_name","YEAR"))]
+# DT_SocioEcon[, (Number_columns) := replace(.SD,.SD<11, floor(runif(1,min=13,max=25))), .SDcols = Number_columns]
+
+rm(DT_INHSAMAOW)
+rm(DT_Laag_inkomen)
+rm(DT_FUNC_DEBT)
+rm(DT_WSNPPERSBUS)
+rm(DT_Wanbet)
+gc()
+
+DT_Wlz_ind = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","Wlz_ind")]
+
+# DT_Wlz_ind[is.na(N),N:=0]
+DT_Wlz_ind[,N:=round(N/5)*5]
+DT_Wlz_ind[N <11,N:=0]
+# DT_Wlz_ind[N <11,N:=sample(15:35,size=length(DT_Wlz_ind[N <11]$N),replace=T)]
+DT_Wlz_ind[,Wlz_ind:= paste0("Wlz_ind_",Wlz_ind)]
+DT_Wlz_ind = DT_Wlz_ind %>% dcast(wc+wc_name+YEAR~Wlz_ind)
+
+DT_Wmo_ind = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","Wmo_ind")]
+
+# DT_Wmo_ind[is.na(N),N:=0]
+DT_Wmo_ind[,N:=round(N/5)*5]
+DT_Wmo_ind[N <11,N:=0]
+# DT_Wmo_ind[N <11,N:=sample(15:35,size=length(DT_Wmo_ind[N <11]$N),replace=T)]
+DT_Wmo_ind[,Wmo_ind:= paste0("Wmo_ind_",Wmo_ind)]
+DT_Wmo_ind = DT_Wmo_ind %>% dcast(wc+wc_name+YEAR~Wmo_ind)
+
+DT_ZVWKHUISARTS_CAT = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","ZVWKHUISARTS_CAT")]
+
+# DT_ZVWKHUISARTS_CAT[is.na(N),N:=0]
+DT_ZVWKHUISARTS_CAT[,N:=round(N/5)*5]
+DT_ZVWKHUISARTS_CAT[N <11,N:=0]
+# DT_ZVWKHUISARTS_CAT[N <11,N:=sample(15:35,size=length(DT_ZVWKHUISARTS_CAT[N <11]$N),replace=T)]
+DT_ZVWKHUISARTS_CAT[,ZVWKHUISARTS_CAT:= paste0("ZVWKHUISARTS_CAT_",ZVWKHUISARTS_CAT)]
+DT_ZVWKHUISARTS_CAT = DT_ZVWKHUISARTS_CAT %>% dcast(wc+wc_name+YEAR~ZVWKHUISARTS_CAT)
+
+DT_ZVWKFARMACIE_CAT = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","ZVWKFARMACIE_CAT")]
+
+# DT_ZVWKFARMACIE_CAT[is.na(N),N:=0]
+DT_ZVWKFARMACIE_CAT[,N:=round(N/5)*5]
+DT_ZVWKFARMACIE_CAT[N <11,N:=0]
+# DT_ZVWKFARMACIE_CAT[N <11,N:=sample(15:35,size=length(DT_ZVWKFARMACIE_CAT[N <11]$N),replace=T)]
+DT_ZVWKFARMACIE_CAT[,ZVWKFARMACIE_CAT:= paste0("ZVWKFARMACIE_CAT_",ZVWKFARMACIE_CAT)]
+DT_ZVWKFARMACIE_CAT = DT_ZVWKFARMACIE_CAT %>% dcast(wc+wc_name+YEAR~ZVWKFARMACIE_CAT)
+
+DT_ZVWKMONDZORG_CAT = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","ZVWKMONDZORG_CAT")]
+
+# DT_ZVWKMONDZORG_CAT[is.na(N),N:=0]
+DT_ZVWKMONDZORG_CAT[,N:=round(N/5)*5]
+DT_ZVWKMONDZORG_CAT[N <11,N:=0]
+# DT_ZVWKMONDZORG_CAT[N <11,N:=sample(15:35,size=length(DT_ZVWKMONDZORG_CAT[N <11]$N),replace=T)]
+DT_ZVWKMONDZORG_CAT[,ZVWKMONDZORG_CAT:= paste0("ZVWKMONDZORG_CAT_",ZVWKMONDZORG_CAT)]
+DT_ZVWKMONDZORG_CAT = DT_ZVWKMONDZORG_CAT %>% dcast(wc+wc_name+YEAR~ZVWKMONDZORG_CAT)
+
+DT_ZVWKZIEKENHUIS_CAT = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","ZVWKZIEKENHUIS_CAT")]
+
+# DT_ZVWKZIEKENHUIS_CAT[is.na(N),N:=0]
+DT_ZVWKZIEKENHUIS_CAT[,N:=round(N/5)*5]
+DT_ZVWKZIEKENHUIS_CAT[N <11,N:=0]
+# DT_ZVWKZIEKENHUIS_CAT[N <11,N:=sample(15:35,size=length(DT_ZVWKZIEKENHUIS_CAT[N <11]$N),replace=T)]
+DT_ZVWKZIEKENHUIS_CAT[,ZVWKZIEKENHUIS_CAT:= paste0("ZVWKZIEKENHUIS_CAT_",ZVWKZIEKENHUIS_CAT)]
+DT_ZVWKZIEKENHUIS_CAT = DT_ZVWKZIEKENHUIS_CAT %>% dcast(wc+wc_name+YEAR~ZVWKZIEKENHUIS_CAT)
+
+DT_ZVWKOSTENPSYCHO_CAT = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","ZVWKOSTENPSYCHO_CAT")]
+
+# DT_ZVWKOSTENPSYCHO_CAT[is.na(N),N:=0]
+DT_ZVWKOSTENPSYCHO_CAT[,N:=round(N/5)*5]
+DT_ZVWKOSTENPSYCHO_CAT[N <11,N:=0]
+# DT_ZVWKOSTENPSYCHO_CAT[N <11,N:=sample(15:35,size=length(DT_ZVWKOSTENPSYCHO_CAT[N <11]$N),replace=T)]
+DT_ZVWKOSTENPSYCHO_CAT[,ZVWKOSTENPSYCHO_CAT:= paste0("ZVWKOSTENPSYCHO_CAT_",ZVWKOSTENPSYCHO_CAT)]
+DT_ZVWKOSTENPSYCHO_CAT = DT_ZVWKOSTENPSYCHO_CAT %>% dcast(wc+wc_name+YEAR~ZVWKOSTENPSYCHO_CAT)
+
+DT_NOPZVWKHUISARTSCONSULT_CAT = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","NOPZVWKHUISARTSCONSULT_CAT")]
+
+# DT_NOPZVWKHUISARTSCONSULT_CAT[is.na(N),N:=0]
+DT_NOPZVWKHUISARTSCONSULT_CAT[,N:=round(N/5)*5]
+DT_NOPZVWKHUISARTSCONSULT_CAT[N <11,N:=0]
+# DT_NOPZVWKHUISARTSCONSULT_CAT[N <11,N:=sample(15:35,size=length(DT_NOPZVWKHUISARTSCONSULT_CAT[N <11]$N),replace=T)]
+DT_NOPZVWKHUISARTSCONSULT_CAT[,NOPZVWKHUISARTSCONSULT_CAT:= paste0("NOPZVWKHUISARTSCONSULT_CAT_",NOPZVWKHUISARTSCONSULT_CAT)]
+DT_NOPZVWKHUISARTSCONSULT_CAT = DT_NOPZVWKHUISARTSCONSULT_CAT %>% dcast(wc+wc_name+YEAR~NOPZVWKHUISARTSCONSULT_CAT)
+
+DT_ZorgKost = merge(DT_Pop,DT_Wmo_ind,by = c("wc","wc_name","YEAR"))
+DT_ZorgKost = merge(DT_ZorgKost,DT_Wlz_ind,by = c("wc","wc_name","YEAR"))
+DT_ZorgKost = merge(DT_ZorgKost,DT_ZVWKHUISARTS_CAT,by = c("wc","wc_name","YEAR"))
+DT_ZorgKost = merge(DT_ZorgKost,DT_ZVWKFARMACIE_CAT,by = c("wc","wc_name","YEAR"))
+DT_ZorgKost = merge(DT_ZorgKost,DT_ZVWKMONDZORG_CAT,by = c("wc","wc_name","YEAR"))
+DT_ZorgKost = merge(DT_ZorgKost,DT_ZVWKZIEKENHUIS_CAT,by = c("wc","wc_name","YEAR"))
+DT_ZorgKost = merge(DT_ZorgKost,DT_ZVWKOSTENPSYCHO_CAT,by = c("wc","wc_name","YEAR"))
+DT_ZorgKost = merge(DT_ZorgKost,DT_NOPZVWKHUISARTSCONSULT_CAT,by = c("wc","wc_name","YEAR"))
+
+DT_ZorgKost[is.na(DT_ZorgKost)] = 0
+
+# Number_columns = colnames(DT_ZorgKost)[!(colnames(DT_ZorgKost) %in% c("wc","wc_name","YEAR"))]
+# DT_ZorgKost[, (Number_columns) := replace(.SD,.SD<11, floor(runif(1,min=13,max=25))), .SDcols = Number_columns]
+
+
+rm(DT_Wlz_ind)
+rm(DT_Wmo_ind)
+rm(DT_ZVWKHUISARTS_CAT)
+rm(DT_ZVWKFARMACIE_CAT)
+rm(DT_ZVWKMONDZORG_CAT)
+rm(DT_ZVWKZIEKENHUIS_CAT)
+rm(DT_ZVWKOSTENPSYCHO_CAT)
+gc()
+
+
+
+DT_UniqueMed_CAT = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","UniqueMed_CAT")]
+
+# DT_UniqueMed_CAT[is.na(N),N:=0]
+DT_UniqueMed_CAT[,N:=round(N/5)*5]
+DT_UniqueMed_CAT[N <11,N:=0]
+# DT_UniqueMed_CAT[N <11,N:=sample(15:35,size=length(DT_UniqueMed_CAT[N <11]$N),replace=T)]
+DT_UniqueMed_CAT[,UniqueMed_CAT:= paste0("UniqueMed_CAT_",UniqueMed_CAT)]
+DT_UniqueMed_CAT = DT_UniqueMed_CAT %>% dcast(wc+wc_name+YEAR~UniqueMed_CAT)
+
+DT_Ext_UniqueMed_CAT = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","Ext_UniqueMed_CAT")]
+
+# DT_Ext_UniqueMed_CAT[is.na(N),N:=0]
+DT_Ext_UniqueMed_CAT[,N:=round(N/5)*5]
+DT_Ext_UniqueMed_CAT[N <11,N:=0]
+# DT_Ext_UniqueMed_CAT[N <11,N:=sample(15:35,size=length(DT_Ext_UniqueMed_CAT[N <11]$N),replace=T)]
+DT_Ext_UniqueMed_CAT[,Ext_UniqueMed_CAT:= paste0("Ext_UniqueMed_CAT_",Ext_UniqueMed_CAT)]
+DT_Ext_UniqueMed_CAT = DT_Ext_UniqueMed_CAT %>% dcast(wc+wc_name+YEAR~Ext_UniqueMed_CAT)
+
+DT_HVZ_MED = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","HVZ_MED")]
+
+# DT_HVZ_MED[is.na(N),N:=0]
+DT_HVZ_MED[,N:=round(N/5)*5]
+DT_HVZ_MED[N <11,N:=0]
+# DT_HVZ_MED[N <11,N:=sample(15:35,size=length(DT_HVZ_MED[N <11]$N),replace=T)]
+DT_HVZ_MED[,HVZ_MED:= paste0("HVZ_MED_",HVZ_MED)]
+DT_HVZ_MED = DT_HVZ_MED %>% dcast(wc+wc_name+YEAR~HVZ_MED)
+
+DT_DIAB_MED = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","DIAB_MED")]
+
+# DT_DIAB_MED[is.na(N),N:=0]
+DT_DIAB_MED[,N:=round(N/5)*5]
+DT_DIAB_MED[N <11,N:=0]
+# DT_DIAB_MED[N <11,N:=sample(15:35,size=length(DT_DIAB_MED[N <11]$N),replace=T)]
+DT_DIAB_MED[,DIAB_MED:= paste0("DIAB_MED_",DIAB_MED)]
+DT_DIAB_MED = DT_DIAB_MED %>% dcast(wc+wc_name+YEAR~DIAB_MED)
+
+DT_BLOEDDRUKV_MED = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","BLOEDDRUKV_MED")]
+
+# DT_BLOEDDRUKV_MED[is.na(N),N:=0]
+DT_BLOEDDRUKV_MED[,N:=round(N/5)*5]
+DT_BLOEDDRUKV_MED[N <11,N:=0]
+# DT_BLOEDDRUKV_MED[N <11,N:=sample(15:35,size=length(DT_BLOEDDRUKV_MED[N <11]$N),replace=T)]
+DT_BLOEDDRUKV_MED[,BLOEDDRUKV_MED:= paste0("BLOEDDRUKV_MED_",BLOEDDRUKV_MED)]
+DT_BLOEDDRUKV_MED = DT_BLOEDDRUKV_MED %>% dcast(wc+wc_name+YEAR~BLOEDDRUKV_MED)
+
+DT_CHOL_MED = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","CHOL_MED")]
+
+# DT_CHOL_MED[is.na(N),N:=0]
+DT_CHOL_MED[,N:=round(N/5)*5]
+DT_CHOL_MED[N <11,N:=0]
+# DT_CHOL_MED[N <11,N:=sample(15:35,size=length(DT_CHOL_MED[N <11]$N),replace=T)]
+DT_CHOL_MED[,CHOL_MED:= paste0("CHOL_MED_",CHOL_MED)]
+DT_CHOL_MED = DT_CHOL_MED %>% dcast(wc+wc_name+YEAR~CHOL_MED)
+
+DT_Med = merge(DT_Pop,DT_HVZ_MED,by = c("wc","wc_name","YEAR"))
+DT_Med = merge(DT_Med,DT_UniqueMed_CAT,by = c("wc","wc_name","YEAR"))
+DT_Med = merge(DT_Med,DT_Ext_UniqueMed_CAT,by = c("wc","wc_name","YEAR"))
+DT_Med = merge(DT_Med,DT_DIAB_MED,by = c("wc","wc_name","YEAR"))
+DT_Med = merge(DT_Med,DT_BLOEDDRUKV_MED,by = c("wc","wc_name","YEAR"))
+DT_Med = merge(DT_Med,DT_CHOL_MED,by = c("wc","wc_name","YEAR"))
+
+DT_Med[is.na(DT_Med)] = 0
+
+# Number_columns = colnames(DT_Med)[!(colnames(DT_Med) %in% c("wc","wc_name","YEAR"))]
+# DT_Med[, (Number_columns) := replace(.SD,.SD<11, floor(runif(1,min=13,max=25))), .SDcols = Number_columns]
+
+
+
+rm(DT_UniqueMed_CAT)
+rm(DT_HVZ_MED)
+rm(DT_DIAB_MED)
+rm(DT_BLOEDDRUKV_MED)
+rm(DT_CHOL_MED)
+gc()
+
+
+DT_COPD = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","COPD")]
+
+# DT_COPD[is.na(N),N:=0]
+DT_COPD[,N:=round(N/5)*5]
+DT_COPD[N <11,N:=0]
+# DT_COPD[N <11,N:=sample(15:35,size=length(DT_COPD[N <11]$N),replace=T)]
+DT_COPD[,COPD:= paste0("COPD_",COPD)]
+DT_COPD = DT_COPD %>% dcast(wc+wc_name+YEAR~COPD)
+
+DT_Hypertensie = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","Hypertensie")]
+
+# DT_Hypertensie[is.na(N),N:=0]
+DT_Hypertensie[,N:=round(N/5)*5]
+DT_Hypertensie[N <11,N:=0]
+# DT_Hypertensie[N <11,N:=sample(15:35,size=length(DT_Hypertensie[N <11]$N),replace=T)]
+DT_Hypertensie[,Hypertensie:= paste0("Hypertensie_",Hypertensie)]
+DT_Hypertensie = DT_Hypertensie %>% dcast(wc+wc_name+YEAR~Hypertensie)
+
+DT_Diabetes_I = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","Diabetes_I")]
+
+# DT_Diabetes_I[is.na(N),N:=0]
+DT_Diabetes_I[,N:=round(N/5)*5]
+DT_Diabetes_I[N <11,N:=0]
+# DT_Diabetes_I[N <11,N:=sample(15:35,size=length(DT_Diabetes_I[N <11]$N),replace=T)]
+DT_Diabetes_I[,Diabetes_I:= paste0("Diabetes_I_",Diabetes_I)]
+DT_Diabetes_I = DT_Diabetes_I %>% dcast(wc+wc_name+YEAR~Diabetes_I)
+
+DT_Diabetes_II = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","Diabetes_II")]
+
+# DT_Diabetes_II[is.na(N),N:=0]
+DT_Diabetes_II[,N:=round(N/5)*5]
+DT_Diabetes_II[N <11,N:=0]
+# DT_Diabetes_II[N <11,N:=sample(15:35,size=length(DT_Diabetes_II[N <11]$N),replace=T)]
+DT_Diabetes_II[,Diabetes_II:= paste0("Diabetes_II_",Diabetes_II)]
+DT_Diabetes_II = DT_Diabetes_II %>% dcast(wc+wc_name+YEAR~Diabetes_II)
+
+DT_Chronic_Hartfalen = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","Chronic_Hartfalen")]
+
+# DT_Chronic_Hartfalen[is.na(N),N:=0]
+DT_Chronic_Hartfalen[,N:=round(N/5)*5]
+DT_Chronic_Hartfalen[N <11,N:=0]
+# DT_Chronic_Hartfalen[N <11,N:=sample(15:35,size=length(DT_Chronic_Hartfalen[N <11]$N),replace=T)]
+DT_Chronic_Hartfalen[,Chronic_Hartfalen:= paste0("Chronic_Hartfalen_",Chronic_Hartfalen)]
+DT_Chronic_Hartfalen = DT_Chronic_Hartfalen %>% dcast(wc+wc_name+YEAR~Chronic_Hartfalen)
+
+DT_OMA = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","OMA")]
+
+# DT_OMA[is.na(N),N:=0]
+DT_OMA[,N:=round(N/5)*5]
+DT_OMA[N <11,N:=0]
+# DT_OMA[N <11,N:=sample(15:35,size=length(DT_OMA[N <11]$N),replace=T)]
+DT_OMA[,OMA:= paste0("OMA_",OMA)]
+DT_OMA = DT_OMA %>% dcast(wc+wc_name+YEAR~OMA)
+
+DT_Prostaatcarcinoom = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","Prostaatcarcinoom")]
+
+# DT_Prostaatcarcinoom[is.na(N),N:=0]
+DT_Prostaatcarcinoom[,N:=round(N/5)*5]
+DT_Prostaatcarcinoom[N <11,N:=0]
+# DT_Prostaatcarcinoom[N <11,N:=sample(15:35,size=length(DT_Prostaatcarcinoom[N <11]$N),replace=T)]
+DT_Prostaatcarcinoom[,Prostaatcarcinoom:= paste0("Prostaatcarcinoom_",Prostaatcarcinoom)]
+DT_Prostaatcarcinoom = DT_Prostaatcarcinoom %>% dcast(wc+wc_name+YEAR~Prostaatcarcinoom)
+
+DT_Morbus_Parkinson = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","Morbus_Parkinson")]
+
+# DT_Morbus_Parkinson[is.na(N),N:=0]
+DT_Morbus_Parkinson[,N:=round(N/5)*5]
+DT_Morbus_Parkinson[N <11,N:=0]
+# DT_Morbus_Parkinson[N <11,N:=sample(15:35,size=length(DT_Morbus_Parkinson[N <11]$N),replace=T)]
+DT_Morbus_Parkinson[,Morbus_Parkinson:= paste0("Morbus_Parkinson_",Morbus_Parkinson)]
+DT_Morbus_Parkinson = DT_Morbus_Parkinson %>% dcast(wc+wc_name+YEAR~Morbus_Parkinson)
+
+DT_Heupfractuur = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","Heupfractuur")]
+
+# DT_Heupfractuur[is.na(N),N:=0]
+DT_Heupfractuur[,N:=round(N/5)*5]
+DT_Heupfractuur[N <11,N:=0]
+# DT_Heupfractuur[N <11,N:=sample(15:35,size=length(DT_Heupfractuur[N <11]$N),replace=T)]
+DT_Heupfractuur[,Heupfractuur:= paste0("Heupfractuur_",Heupfractuur)]
+DT_Heupfractuur = DT_Heupfractuur %>% dcast(wc+wc_name+YEAR~Heupfractuur)
+
+DT_BMIUP45 = ADD_DATA[,.N,by=c("wc","wc_name","YEAR","BMI>45")]
+
+# DT_BMIUP45[is.na(N),N:=0]
+DT_BMIUP45[,N:=round(N/5)*5]
+DT_BMIUP45[N <11,N:=0]
+# DT_BMIUP45[N <11,N:=sample(15:35,size=length(DT_BMIUP45[N <11]$N),replace=T)]
+setnames(DT_BMIUP45, "BMI>45", "BMIUP45")
+DT_BMIUP45[,BMIUP45:= paste0("BMIUP45",BMIUP45)]
+DT_BMIUP45 = DT_BMIUP45 %>% dcast(wc+wc_name+YEAR~BMIUP45)
+
+
+DT_Diagnosis = merge(DT_Pop,DT_Hypertensie,by = c("wc","wc_name","YEAR"))
+DT_Diagnosis = merge(DT_Diagnosis,DT_COPD,by = c("wc","wc_name","YEAR"))
+DT_Diagnosis = merge(DT_Diagnosis,DT_Diabetes_I,by = c("wc","wc_name","YEAR"))
+DT_Diagnosis = merge(DT_Diagnosis,DT_Diabetes_II,by = c("wc","wc_name","YEAR"))
+DT_Diagnosis = merge(DT_Diagnosis,DT_Chronic_Hartfalen,by = c("wc","wc_name","YEAR"))
+DT_Diagnosis = merge(DT_Diagnosis,DT_OMA,by = c("wc","wc_name","YEAR"))
+DT_Diagnosis = merge(DT_Diagnosis,DT_Prostaatcarcinoom,by = c("wc","wc_name","YEAR"))
+DT_Diagnosis = merge(DT_Diagnosis,DT_Morbus_Parkinson,by = c("wc","wc_name","YEAR"))
+DT_Diagnosis = merge(DT_Diagnosis,DT_Heupfractuur,by = c("wc","wc_name","YEAR"))
+DT_Diagnosis = merge(DT_Diagnosis,DT_BMIUP45,by = c("wc","wc_name","YEAR"))
+
+DT_Diagnosis[is.na(DT_Diagnosis)] = 0
+
+# Number_columns = colnames(DT_Diagnosis)[!(colnames(DT_Diagnosis) %in% c("wc","wc_name","YEAR"))]
+# DT_Diagnosis[, (Number_columns) := replace(.SD,.SD<11, floor(runif(1,min=13,max=25))), .SDcols = Number_columns]
+
+
+rm(DT_COPD)
+rm(DT_Hypertensie)
+rm(DT_Diabetes_I)
+rm(DT_Diabetes_II)
+rm(DT_Chronic_Hartfalen)
+rm(DT_OMA)
+rm(DT_Prostaatcarcinoom)
+rm(DT_Morbus_Parkinson)
+rm(DT_Heupfractuur)
+rm(DT_BMIUP45)
+
+gc()
+
+list_of_data = list("DT_PERSON"=DT_PERSON,"DT_Household_Events"=DT_Household_Events,"DT_SocioEcon"=DT_SocioEcon,"DT_ZorgKost"=DT_ZorgKost,"DT_Med"=DT_Med,"DT_Diagnosis"=DT_Diagnosis)
+openxlsx::write.xlsx(list_of_data, file = "H:/Datavoorbereiding/Faiq/HADOKS/HADOKS_Categorical ver 2.xlsx")
+
+
+# DT_PERSON
+```
+
+
+```{r}
+
+
+
+```
+
+```{r}
+ALL_VARIABLES = c("LIFEEVENTS_MOVING", "LIFEEVENTS_HUISHOUDENS", "LIFEEVENTS_ALL",
+"AANTALPERSHH", "INHAHL", "INHGESTINKH", 
+"ZVWKHUISARTS", "ZVWKHUISARTS_NO_REG", "ZVWKFARMACIE", "ZVWKMONDZORG", "ZVWKZIEKENHUIS",
+"ZVWKPARAMEDISCH", "ZVWKHULPMIDDEL", "ZVWKZIEKENVERVOER", "ZVWKGEBOORTEZORG", "ZVWKBUITENLAND", "ZVWKOVERIG",
+"ZVWKEERSTELIJNSPSYCHO","ZVWKGGZ","ZVWKGENBASGGZ","ZVWKSPECGGZ", 
+"ZVWKGERIATRISCH","ZVWKWYKVERPLEGING","NOPZVWKHUISARTSINSCHRIJF","NOPZVWKHUISARTSCONSULT",
+"NOPZVWKHUISARTSOVERIG", "ZVWKOSTENTOTAAL", "ZVWKOSTENPSYCHO",
+"UniqueMed", "WLZ_uitgaven", "Wmo_totaal", 
+"AGE", "AGE_CAT", "Gender", "N", "MinorEthnicity", "MajorEthnicity",
+"TYPHH", "Multiperson", "HouseholdType", "INPSECJ", "LIFEEVENTS_MOVING", "LIFEEVENTS_HUISHOUDENS", "LIFEEVENTS_ALL", 
+"INHSAMAOW", "Laag_inkomen", "FUNC_DEBT", "WSNPPERSBUS", "Wanbet", "Wmo_ind", "Wlz_ind", "ZVWKHUISARTS_CAT", "ZVWKFARMACIE_CAT", "ZVWKMONDZORG_CAT", "ZVWKZIEKENHUIS_CAT", "ZVWKOSTENPSYCHO_CAT", "NOPZVWKHUISARTSCONSULT_CAT",
+"DT_UniqueMed_CAT","DT_HVZ_MED","DT_DIAB_MED","DT_BLOEDDRUKV_MED","DT_CHOL_MED",
+"DT_COPD","DT_Hypertensie","DT_Diabetes_I","DT_Diabetes_II","DT_Chronic_Hartfalen","DT_OMA","DT_Prostaatcarcinoom","DT_Morbus_Parkinson","DT_Heupfractuur","DT_BMIUP45"
+)
+
+
+
+
+openxlsx::write.xlsx(data.table(ALL_VARIABLES), file = "H:/Datavoorbereiding/Faiq/HADOKS/HADOKS_VARIABLES ver 2.xlsx")
+```
+
+
+<!-- ```{r} -->
+<!-- table_data = ADD_DATA[,list("MEAN"=mean(INHGESTINKH,na.rm=T),"SD"=sd(INHGESTINKH,na.rm=T),"SUM"=sum(INHGESTINKH,na.rm=T),"MEDIAN"=median(INHGESTINKH,na.rm=T),"MIN"=min(INHGESTINKH,na.rm=T),"MAX"=max(INHGESTINKH,na.rm=T)), by=c("wc","YEAR")][order(wc,YEAR)] -->
+<!-- table_data -->
+<!-- gc() -->
+
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- ADD_DATA[RINPERSOON == "004286416"] -->
+
+<!-- names(ADD_DATA) -->
+
+<!-- length(unique(ADD_DATA[gem == "0603"]$RINPERSOON)) -->
+
+<!-- ADD_DATA[gem == "0603"] -->
+<!-- unique(ADD_DATA$gem) -->
+<!-- ``` -->
+
+
+
+
+<!-- ```{r} -->
+<!-- table_data = ADD_DATA[,list("MEAN"=mean(ZVWKOSTENTOTAAL,na.rm=T),"SD"=sd(ZVWKOSTENTOTAAL,na.rm=T),"VAR"=var(ZVWKOSTENTOTAAL,na.rm=T),"SUM"=sum(ZVWKOSTENTOTAAL,na.rm=T),"MEDIAN"=median(ZVWKOSTENTOTAAL,na.rm=T),"MIN"=min(ZVWKOSTENTOTAAL,na.rm=T),"MAX"=max(ZVWKOSTENTOTAAL,na.rm=T)), by=c("wc","YEAR")] -->
+<!-- table_data[order(wc,YEAR)] -->
+
+<!-- table_data = ADD_DATA[,list("MEAN"=mean(AGE,na.rm=T),"SD"=sd(AGE,na.rm=T),"VAR"=var(AGE,na.rm=T),"SUM"=sum(AGE,na.rm=T),"MEDIAN"=median(AGE,na.rm=T),"MIN"=min(AGE,na.rm=T),"MAX"=max(AGE,na.rm=T)), by=c("wc","YEAR")] -->
+<!-- table_data[order(wc,YEAR)] -->
+
+<!-- # table_data= ADD_DATA[,table(wc,YEAR,Gender)] -->
+<!-- # table_data -->
+
+<!-- table_data = ADD_DATA -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+
+<!-- onlyParkinson = ADD_DATA[FirstYearParkinson == 1 ] -->
+
+<!-- freq_all_YEAR = onlyParkinson[DBCmonth !="",.N,by=c("RINPERSOON", "YEAR")][,.N,by=c( "YEAR")][order(YEAR)] -->
+
+<!-- ggplot(freq_all_YEAR, aes(YEAR, N)) +geom_col()  -->
+
+<!-- freq_all_month = onlyParkinson[DBCmonth !="",.N,by=c("RINPERSOON", "YEAR", "DBCmonth")][,.N,by=c( "YEAR", "DBCmonth")][order(YEAR,DBCmonth)] -->
+
+<!-- freq_all_month[, DBCmonth := as.numeric(DBCmonth)] -->
+
+<!-- ggplot(freq_all_month, aes(DBCmonth, N, color = YEAR)) +geom_line() + scale_x_continuous( n.breaks = 12) -->
+
+<!-- ``` -->
+<!-- ```{r} -->
+
+<!-- onlyParkinson = ADD_DATA[Wlz_ind == 1 ] -->
+
+<!-- freq_all_YEAR = onlyParkinson[DBCmonth !="",.N,by=c("RINPERSOON", "YEAR")][,.N,by=c( "YEAR")][order(YEAR)] -->
+
+<!-- ggplot(freq_all_YEAR, aes(YEAR, N)) +geom_col()  -->
+
+<!-- freq_all_month = onlyParkinson[DBCmonth !="",.N,by=c("RINPERSOON", "YEAR", "DBCmonth")][,.N,by=c( "YEAR", "DBCmonth")][order(YEAR,DBCmonth)] -->
+
+<!-- freq_all_month[, DBCmonth := as.numeric(DBCmonth)] -->
+
+<!-- ggplot(freq_all_month, aes(DBCmonth, N, color = YEAR)) +geom_line() + scale_x_continuous( n.breaks = 12) -->
+
+<!-- ``` -->
+
+
+
+<!-- ```{r} -->
+
+<!-- onlyParkinson = ADD_DATA[Wmo_ind == 1 ] -->
+
+<!-- freq_all_YEAR = onlyParkinson[DBCmonth !="",.N,by=c("RINPERSOON", "YEAR")][,.N,by=c( "YEAR")][order(YEAR)] -->
+
+<!-- ggplot(freq_all_YEAR, aes(YEAR, N)) +geom_col()  -->
+
+<!-- freq_all_month = onlyParkinson[DBCmonth !="",.N,by=c("RINPERSOON", "YEAR", "DBCmonth")][,.N,by=c( "YEAR", "DBCmonth")][order(YEAR,DBCmonth)] -->
+
+<!-- freq_all_month[, DBCmonth := as.numeric(DBCmonth)] -->
+
+<!-- ggplot(freq_all_month, aes(DBCmonth, N, color = YEAR)) +geom_line() + scale_x_continuous( n.breaks = 12) -->
+
+<!-- ``` -->
+
+
+
+
+
+
+
+
+
+<!-- ```{r} -->
+<!-- start_time = Sys.time() -->
+
+<!-- write_sav(data = ADD_DATA, path = "H:\\Datavoorbereiding\\Ammar\\HIP REPLACEMENT\\Data - Version 1.sav", compress = T) -->
+
+<!-- ADD_DATA = as.data.table(read_spss("H:\\Datavoorbereiding\\Ammar\\HIP REPLACEMENT\\Data - Version 1.sav"), user_na = F) -->
+
+
+<!-- end_time = Sys.time() -->
+
+<!-- end_time - start_time -->
+<!-- ``` -->
+
+
+
+
+<!-- ```{r} -->
+<!-- MY_CONTROLS = tableby.control( -->
+<!--   test=T, -->
+<!--   total=T, -->
+<!--   numeric.test="kwt", cat.test = "chisq", -->
+<!--   numeric.stats = c("meansd", "medianq1q3", "Nmiss2"), -->
+<!--   cat.stats = c("countpct", "Nmiss2"), -->
+<!--   stats.labels = list( -->
+<!--     meansd = "Mean (SD)", -->
+<!--     medianq1q3 = "Median (Q1,Q3)", -->
+<!--     Nmiss2 = "Missing" -->
+<!--   ) -->
+<!-- ) -->
+
+<!-- MY_LABELS = list( -->
+<!--   AGE = "Age", -->
+<!--   Gender = "Gender", -->
+<!--   Ethnicity = "Ethnicity", -->
+<!--   HouseholdType = "Household Type", -->
+<!--   AANTALPERSHH = "Number of Person", -->
+<!--   INHGESTINKH = "Income", -->
+<!--   Wmo_totaal = "WMO Total", -->
+<!--   Wmo_ind = "WMO Number", -->
+<!--   Wlz_ind = "WLZ Number", -->
+<!--   WLZ_uitgaven = "WLZ Total", -->
+<!--   FinancieringsvormWmo= "WMO Finance", -->
+<!--   WLZLEVERINGSVORM= "WLZ Finance", -->
+<!--   ZVWKOSTENTOTAAL = "ZVWKOSTENTOTAAL", -->
+<!--   ZVWKZIEKENHUIS = "ZVWKZIEKENHUIS", -->
+<!--   ZVWKFARMACIE = "ZVWKFARMACIE", -->
+<!--   ZVWKOSTENHUISARTS = "ZVWKOSTENHUISARTS", -->
+<!--   ZVWKOSTENAMBULANCE = "ZVWKOSTENAMBULANCE", -->
+<!--   ZVWKHULPMIDDEL = "ZVWKHULPMIDDEL", -->
+<!--   DaystoDeath = "Days to Death" -->
+<!-- ) -->
+
+<!-- ADD_DATA$Wlz_ind = as.factor(ADD_DATA$Wlz_ind) -->
+<!-- ADD_DATA$Wmo_ind = as.factor(ADD_DATA$Wmo_ind) -->
+<!-- # ADD_DATA$FinancieringsvormWmo = as.factor(ADD_DATA$Wlz_ind) -->
+<!-- # ADD_DATA$WLZLEVERINGSVORM = as.factor(ADD_DATA$Wmo_ind) -->
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+
+<!-- test_table = tableby(YEAR ~ AGE + Gender + Ethnicity + HouseholdType + AANTALPERSHH + INHGESTINKH + Wmo_ind + Wlz_ind + Wmo_totaal + WLZ_uitgaven + ZVWKOSTENTOTAAL + ZVWKZIEKENHUIS + ZVWKFARMACIE + ZVWKOSTENHUISARTS + ZVWKOSTENAMBULANCE + ZVWKHULPMIDDEL + DaystoDeath, control = MY_CONTROLS, data = ADD_DATA[ Parkinson == 0]) -->
+
+<!-- summary(test_table, labelTranslations= MY_LABELS, title = "Summary for every year") -->
+
+<!-- writeWorksheetToFile("H:/Datavoorbereiding/Faiq/PARKINSON/output_parkinson_ver1.xlsx", data = print(summary(test_table, labelTranslations= MY_LABELS)), sheet="Summary Parkinson 0", header=T, clearSheets = T) -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- start_time = Sys.time() -->
+
+<!-- test_table = tableby(YEAR ~ AGE + Gender + Ethnicity + HouseholdType + AANTALPERSHH + INHGESTINKH + Wmo_ind + Wlz_ind + Wmo_totaal + WLZ_uitgaven + FinancieringsvormWmo + WLZLEVERINGSVORM + ZVWKOSTENTOTAAL + ZVWKZIEKENHUIS + ZVWKFARMACIE + ZVWKOSTENHUISARTS + ZVWKOSTENAMBULANCE + ZVWKHULPMIDDEL + DaystoDeath, control = MY_CONTROLS, data = ADD_DATA[ Parkinson == 1]) -->
+
+<!-- summary(test_table, labelTranslations= MY_LABELS, title = "Summary for every year") -->
+
+<!-- writeWorksheetToFile("H:/Datavoorbereiding/Faiq/PARKINSON/output_parkinson_ver1.xlsx", data = print(summary(test_table, labelTranslations= MY_LABELS)), sheet="Summary Parkinson 1", header=T, clearSheets = T) -->
+<!-- ``` -->
+
+
+
+<!-- ```{r} -->
+<!-- Parkinson_2013 = unique(ADD_DATA[FirstYearParkinson == 1 & YEAR == "2013"]$RINPERSOON) -->
+<!-- Parkinson_2014 = unique(ADD_DATA[FirstYearParkinson == 1 & YEAR == "2014"]$RINPERSOON) -->
+<!-- Parkinson_2015 = unique(ADD_DATA[FirstYearParkinson == 1 & YEAR == "2015"]$RINPERSOON) -->
+<!-- Parkinson_2016 = unique(ADD_DATA[FirstYearParkinson == 1 & YEAR == "2016"]$RINPERSOON) -->
+<!-- Parkinson_2017 = unique(ADD_DATA[FirstYearParkinson == 1 & YEAR == "2017"]$RINPERSOON) -->
+<!-- Parkinson_2018 = unique(ADD_DATA[FirstYearParkinson == 1 & YEAR == "2018"]$RINPERSOON) -->
+<!-- Parkinson_2019 = unique(ADD_DATA[FirstYearParkinson == 1 & YEAR == "2019"]$RINPERSOON) -->
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+
+<!-- test_table = tableby(YEAR ~ AGE + Gender + Ethnicity + HouseholdType + AANTALPERSHH + INHGESTINKH + Wmo_ind + Wlz_ind + Wmo_totaal + WLZ_uitgaven + FinancieringsvormWmo + WLZLEVERINGSVORM + ZVWKOSTENTOTAAL + ZVWKZIEKENHUIS + ZVWKFARMACIE + ZVWKOSTENHUISARTS + ZVWKOSTENAMBULANCE + ZVWKHULPMIDDEL + DaystoDeath, control = MY_CONTROLS, data = ADD_DATA[Parkinson_2013, on=c("RINPERSOON"), nomatch =NULL]) -->
+
+<!-- summary(test_table, labelTranslations= MY_LABELS) -->
+<!-- writeWorksheetToFile("H:/Datavoorbereiding/Faiq/PARKINSON/output_parkinson_ver1.xlsx", data = print(summary(test_table, labelTranslations= MY_LABELS)), sheet="Summary Parkinson 2013", header=T, clearSheets = T) -->
+
+
+<!-- test_table = tableby(YEAR ~ AGE + Gender + Ethnicity + HouseholdType + AANTALPERSHH + INHGESTINKH + Wmo_ind + Wlz_ind + Wmo_totaal + WLZ_uitgaven + FinancieringsvormWmo + WLZLEVERINGSVORM + ZVWKOSTENTOTAAL + ZVWKZIEKENHUIS + ZVWKFARMACIE + ZVWKOSTENHUISARTS + ZVWKOSTENAMBULANCE + ZVWKHULPMIDDEL + DaystoDeath, control = MY_CONTROLS, data = ADD_DATA[Parkinson_2014, on=c("RINPERSOON"), nomatch =NULL]) -->
+
+<!-- summary(test_table, labelTranslations= MY_LABELS) -->
+<!-- writeWorksheetToFile("H:/Datavoorbereiding/Faiq/PARKINSON/output_parkinson_ver1.xlsx", data = print(summary(test_table, labelTranslations= MY_LABELS)), sheet="Summary Parkinson 2014", header=T, clearSheets = T) -->
+
+<!-- test_table = tableby(YEAR ~ AGE + Gender + Ethnicity + HouseholdType + AANTALPERSHH + INHGESTINKH + Wmo_ind + Wlz_ind + Wmo_totaal + WLZ_uitgaven + FinancieringsvormWmo + WLZLEVERINGSVORM + ZVWKOSTENTOTAAL + ZVWKZIEKENHUIS + ZVWKFARMACIE + ZVWKOSTENHUISARTS + ZVWKOSTENAMBULANCE + ZVWKHULPMIDDEL + DaystoDeath, control = MY_CONTROLS, data = ADD_DATA[Parkinson_2015, on=c("RINPERSOON"), nomatch =NULL]) -->
+
+<!-- summary(test_table, labelTranslations= MY_LABELS) -->
+<!-- writeWorksheetToFile("H:/Datavoorbereiding/Faiq/PARKINSON/output_parkinson_ver1.xlsx", data = print(summary(test_table, labelTranslations= MY_LABELS)), sheet="Summary Parkinson 2015", header=T, clearSheets = T) -->
+
+<!-- test_table = tableby(YEAR ~ AGE + Gender + Ethnicity + HouseholdType + AANTALPERSHH + INHGESTINKH + Wmo_ind + Wlz_ind + Wmo_totaal + WLZ_uitgaven + FinancieringsvormWmo + WLZLEVERINGSVORM + ZVWKOSTENTOTAAL + ZVWKZIEKENHUIS + ZVWKFARMACIE + ZVWKOSTENHUISARTS + ZVWKOSTENAMBULANCE + ZVWKHULPMIDDEL + DaystoDeath, control = MY_CONTROLS, data = ADD_DATA[Parkinson_2016, on=c("RINPERSOON"), nomatch =NULL]) -->
+
+<!-- summary(test_table, labelTranslations= MY_LABELS) -->
+<!-- writeWorksheetToFile("H:/Datavoorbereiding/Faiq/PARKINSON/output_parkinson_ver1.xlsx", data = print(summary(test_table, labelTranslations= MY_LABELS)), sheet="Summary Parkinson 2016", header=T, clearSheets = T) -->
+
+<!-- test_table = tableby(YEAR ~ AGE + Gender + Ethnicity + HouseholdType + AANTALPERSHH + INHGESTINKH + Wmo_ind + Wlz_ind + Wmo_totaal + WLZ_uitgaven + FinancieringsvormWmo + WLZLEVERINGSVORM + ZVWKOSTENTOTAAL + ZVWKZIEKENHUIS + ZVWKFARMACIE + ZVWKOSTENHUISARTS + ZVWKOSTENAMBULANCE + ZVWKHULPMIDDEL + DaystoDeath, control = MY_CONTROLS, data = ADD_DATA[Parkinson_2017, on=c("RINPERSOON"), nomatch =NULL]) -->
+
+<!-- summary(test_table, labelTranslations= MY_LABELS) -->
+<!-- writeWorksheetToFile("H:/Datavoorbereiding/Faiq/PARKINSON/output_parkinson_ver1.xlsx", data = print(summary(test_table, labelTranslations= MY_LABELS)), sheet="Summary Parkinson 2017", header=T, clearSheets = T) -->
+
+<!-- test_table = tableby(YEAR ~ AGE + Gender + Ethnicity + HouseholdType + AANTALPERSHH + INHGESTINKH + Wmo_ind + Wlz_ind + Wmo_totaal + WLZ_uitgaven + FinancieringsvormWmo + WLZLEVERINGSVORM + ZVWKOSTENTOTAAL + ZVWKZIEKENHUIS + ZVWKFARMACIE + ZVWKOSTENHUISARTS + ZVWKOSTENAMBULANCE + ZVWKHULPMIDDEL + DaystoDeath, control = MY_CONTROLS, data = ADD_DATA[Parkinson_2018, on=c("RINPERSOON"), nomatch =NULL]) -->
+
+<!-- summary(test_table, labelTranslations= MY_LABELS) -->
+<!-- writeWorksheetToFile("H:/Datavoorbereiding/Faiq/PARKINSON/output_parkinson_ver1.xlsx", data = print(summary(test_table, labelTranslations= MY_LABELS)), sheet="Summary Parkinson 2018", header=T, clearSheets = T) -->
+
+<!-- test_table = tableby(YEAR ~ AGE + Gender + Ethnicity + HouseholdType + AANTALPERSHH + INHGESTINKH + Wmo_ind + Wlz_ind + Wmo_totaal + WLZ_uitgaven + FinancieringsvormWmo + WLZLEVERINGSVORM + ZVWKOSTENTOTAAL + ZVWKZIEKENHUIS + ZVWKFARMACIE + ZVWKOSTENHUISARTS + ZVWKOSTENAMBULANCE + ZVWKHULPMIDDEL + DaystoDeath, control = MY_CONTROLS, data = ADD_DATA[Parkinson_2019, on=c("RINPERSOON"), nomatch =NULL]) -->
+
+<!-- print(summary(test_table, labelTranslations= MY_LABELS)) -->
+<!-- writeWorksheetToFile("H:/Datavoorbereiding/Faiq/PARKINSON/output_parkinson_ver1.xlsx", data = print(summary(test_table, labelTranslations= MY_LABELS)), sheet="Summary Parkinson 2019", header=T, clearSheets = T) -->
+
+<!-- end_time = Sys.time() -->
+
+<!-- end_time - start_time -->
+<!-- ``` -->
+
+
+
+
